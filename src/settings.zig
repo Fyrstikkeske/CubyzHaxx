@@ -12,6 +12,7 @@ pub const version = "Cubyz α 0.12.0";
 
 pub const highestLOD: u5 = 5;
 
+pub var dontplaceblocks: bool = false;
 
 pub var simulationDistance: u16 = 4;
 
