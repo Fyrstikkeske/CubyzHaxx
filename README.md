@@ -1,5 +1,7 @@
 # Cubyz hax
 
+would be amazing of quantom took some features of this, but i understand if he doesnt.
+
 custom hacked(utility for the most part) client of cubyz.
 
 things added
