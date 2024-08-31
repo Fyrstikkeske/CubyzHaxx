@@ -35,6 +35,8 @@ fn speedCallback(newValue: f32) void {
 
 fn speedFormatter(allocator: main.utils.NeverFailingAllocator, value: f32) []const u8 {
 	return std.fmt.allocPrint(allocator.allocator, "#ffffffPlace/Break Speed: {d:.0} ms", .{value}) catch unreachable;
+}
+
 fn dontplaceblocksCallback(newValue: bool) void {
     settings.dontplaceblocks = newValue;
     settings.save();
@@ -44,11 +46,12 @@ pub fn onOpen() void {
 	const list = VerticalList.init(.{padding, 16 + padding}, 300, 16);
 	list.add(ContinuousSlider.init(.{0, 0}, 128, 1.0, 1000.0, @floatFromInt(settings.updateRepeatDelay), &delayCallback, &delayFormatter));
 	list.add(ContinuousSlider.init(.{0, 0}, 128, 1.0, 500.0, @floatFromInt(settings.updateRepeatSpeed), &speedCallback, &speedFormatter));
+	list.add(CheckBox.init(.{ 0, 0 }, 128, "Dont Place Blocks", settings.dontplaceblocks, &dontplaceblocksCallback));
 	list.finish(.center);
 	window.rootComponent = list.toComponent();
 	window.contentSize = window.rootComponent.?.pos() + window.rootComponent.?.size() + @as(Vec2f, @splat(padding));
 	gui.updateWindowPositions();
-    list.add(CheckBox.init(.{ 0, 0 }, 128, "Dont Place Blocks", settings.dontplaceblocks, &dontplaceblocksCallback));
+    
 }
 
 pub fn onClose() void {
