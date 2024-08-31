@@ -12,7 +12,11 @@ pub const version = "Cubyz α 0.12.0";
 
 pub const highestLOD: u5 = 5;
 
+// HAX
 pub var dontplaceblocks: bool = false;
+
+// From lolhaxx
+pub var fullBright: bool = false;
 
 pub var simulationDistance: u16 = 4;
 

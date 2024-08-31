@@ -42,11 +42,17 @@ fn dontplaceblocksCallback(newValue: bool) void {
     settings.save();
 }
 
+fn fullbrightCallback(newValue: bool) void {
+    settings.fullBright = newValue;
+    settings.save();
+}
+
 pub fn onOpen() void {
 	const list = VerticalList.init(.{padding, 16 + padding}, 300, 16);
 	list.add(ContinuousSlider.init(.{0, 0}, 128, 1.0, 1000.0, @floatFromInt(settings.updateRepeatDelay), &delayCallback, &delayFormatter));
 	list.add(ContinuousSlider.init(.{0, 0}, 128, 1.0, 500.0, @floatFromInt(settings.updateRepeatSpeed), &speedCallback, &speedFormatter));
 	list.add(CheckBox.init(.{ 0, 0 }, 128, "Dont Place Blocks", settings.dontplaceblocks, &dontplaceblocksCallback));
+	list.add(CheckBox.init(.{ 0, 0 }, 128, "Fullbright", settings.fullBright, &fullbrightCallback));
 	list.finish(.center);
 	window.rootComponent = list.toComponent();
 	window.contentSize = window.rootComponent.?.pos() + window.rootComponent.?.size() + @as(Vec2f, @splat(padding));

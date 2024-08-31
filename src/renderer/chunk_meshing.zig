@@ -380,7 +380,10 @@ const PrimitiveMesh = struct { // MARK: PrimitiveMesh
 		parent.lightingData[0].lock.lockRead();
 		parent.lightingData[1].lock.lockRead();
 		for(completeList) |*face| {
-			const light = getLight(parent, .{face.position.x, face.position.y, face.position.z}, face.blockAndQuad.quadIndex);
+			var light = [4]u32{0xffffffff,0xffffffff,0xffffffff,0xffffffff};
+			if (!settings.fullBright) {
+				light = getLight(parent, .{face.position.x, face.position.y, face.position.z}, face.blockAndQuad.quadIndex);
+			}
 			const result = lightMap.getOrPut(light) catch unreachable;
 			if(!result.found_existing) {
 				result.value_ptr.* = @intCast(lightList.items.len/4);
