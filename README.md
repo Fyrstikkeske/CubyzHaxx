@@ -1,4 +1,10 @@
-# Cubyz
+# Cubyz hax
+
+custom hacked(utility for the most part) client of cubyz.
+
+things added
+- blocks arent removed when placing
+
 Cubyz is a 3D voxel sandbox game (inspired by Minecraft).
 
 Cubyz has a bunch of interesting/unique features such as:
