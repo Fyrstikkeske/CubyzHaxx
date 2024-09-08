@@ -27,6 +27,7 @@ pub const Window = @import("graphics/Window.zig");
 
 pub const List = @import("utils/list.zig").List;
 pub const ListUnmanaged = @import("utils/list.zig").ListUnmanaged;
+pub const VirtualList = @import("utils/list.zig").VirtualList;
 
 const file_monitor = utils.file_monitor;
 
@@ -334,6 +335,7 @@ pub const KeyBoard = struct { // MARK: KeyBoard
 		.{.name = "textGotoEnd", .key = c.GLFW_KEY_END, .repeatAction = &gui.textCallbacks.gotoEnd},
 		.{.name = "textDeleteLeft", .key = c.GLFW_KEY_BACKSPACE, .repeatAction = &gui.textCallbacks.deleteLeft},
 		.{.name = "textDeleteRight", .key = c.GLFW_KEY_DELETE, .repeatAction = &gui.textCallbacks.deleteRight},
+		.{.name = "textSelectAll", .key = c.GLFW_KEY_A, .repeatAction = &gui.textCallbacks.selectAll},
 		.{.name = "textCopy", .key = c.GLFW_KEY_C, .repeatAction = &gui.textCallbacks.copy},
 		.{.name = "textPaste", .key = c.GLFW_KEY_V, .repeatAction = &gui.textCallbacks.paste},
 		.{.name = "textCut", .key = c.GLFW_KEY_X, .repeatAction = &gui.textCallbacks.cut},
