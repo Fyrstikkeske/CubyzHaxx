@@ -15,8 +15,12 @@ pub const highestLOD: u5 = 5;
 // HAX
 pub var dontplaceblocks: bool = false;
 
+pub var Hyperspeedspeed: f32 = 4.0;
+
 // From lolhaxx
 pub var fullBright: bool = false;
+
+
 
 pub var simulationDistance: u16 = 4;
 

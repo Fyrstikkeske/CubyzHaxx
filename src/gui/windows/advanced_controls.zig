@@ -47,12 +47,23 @@ fn fullbrightCallback(newValue: bool) void {
     settings.save();
 }
 
+fn HyperSpeedCallback(newValue: f32) void {
+	settings.Hyperspeedspeed = newValue;
+	settings.save();
+}
+
+fn HyperSpeedFormatter(allocator: main.utils.NeverFailingAllocator, value: f32) []const u8 {
+	return std.fmt.allocPrint(allocator.allocator, "#ffffffHYPERSPEED: {d:.0}", .{value}) catch unreachable;
+}
+
 pub fn onOpen() void {
 	const list = VerticalList.init(.{padding, 16 + padding}, 300, 16);
 	list.add(ContinuousSlider.init(.{0, 0}, 128, 1.0, 1000.0, @floatFromInt(settings.updateRepeatDelay), &delayCallback, &delayFormatter));
 	list.add(ContinuousSlider.init(.{0, 0}, 128, 1.0, 500.0, @floatFromInt(settings.updateRepeatSpeed), &speedCallback, &speedFormatter));
 	list.add(CheckBox.init(.{ 0, 0 }, 128, "Dont Place Blocks", settings.dontplaceblocks, &dontplaceblocksCallback));
 	list.add(CheckBox.init(.{ 0, 0 }, 128, "Fullbright", settings.fullBright, &fullbrightCallback));
+	list.add(ContinuousSlider.init(.{0, 0}, 128, 1.0, 2000.0, settings.Hyperspeedspeed, &HyperSpeedCallback, &HyperSpeedFormatter));
+	
 	list.finish(.center);
 	window.rootComponent = list.toComponent();
 	window.contentSize = window.rootComponent.?.pos() + window.rootComponent.?.size() + @as(Vec2f, @splat(padding));
