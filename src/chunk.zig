@@ -130,8 +130,8 @@ var serverPool: std.heap.MemoryPoolAligned(ServerChunk, @alignOf(ServerChunk)) =
 var serverPoolMutex: std.Thread.Mutex = .{};
 
 pub fn init() void {
-	memoryPool = std.heap.MemoryPoolAligned(Chunk, @alignOf(Chunk)).init(main.globalAllocator.allocator);
-	serverPool = std.heap.MemoryPoolAligned(ServerChunk, @alignOf(ServerChunk)).init(main.globalAllocator.allocator);
+	memoryPool = .init(main.globalAllocator.allocator);
+	serverPool = .init(main.globalAllocator.allocator);
 }
 
 pub fn deinit() void {
@@ -151,19 +151,30 @@ pub const ChunkPosition = struct { // MARK: ChunkPosition
 	}
 
 	pub fn equals(self: ChunkPosition, other: anytype) bool {
-		if(@typeInfo(@TypeOf(other)) == .Optional) {
+		if(@typeInfo(@TypeOf(other)) == .optional) {
 			if(other) |notNull| {
 				return self.equals(notNull);
 			}
 			return false;
 		} else if(@TypeOf(other.*) == ServerChunk) {
 			return self.wx == other.super.pos.wx and self.wy == other.super.pos.wy and self.wz == other.super.pos.wz and self.voxelSize == other.super.pos.voxelSize;
-		} else if(@typeInfo(@TypeOf(other)) == .Pointer) {
+		} else if(@typeInfo(@TypeOf(other)) == .pointer) {
 			return self.wx == other.pos.wx and self.wy == other.pos.wy and self.wz == other.pos.wz and self.voxelSize == other.pos.voxelSize;
 		} else @compileError("Unsupported");
 	}
 
-	pub fn getMinDistanceSquared(self: ChunkPosition, playerPosition: Vec3d) f64 {
+	pub fn getMinDistanceSquared(self: ChunkPosition, playerPosition: Vec3i) i64 {
+		const halfWidth: i32 = self.voxelSize*@divExact(chunkSize, 2);
+		var dx: i64 = @abs(self.wx +% halfWidth -% playerPosition[0]);
+		var dy: i64 = @abs(self.wy +% halfWidth -% playerPosition[1]);
+		var dz: i64 = @abs(self.wz +% halfWidth -% playerPosition[2]);
+		dx = @max(0, dx - halfWidth);
+		dy = @max(0, dy - halfWidth);
+		dz = @max(0, dz - halfWidth);
+		return dx*dx + dy*dy + dz*dz;
+	}
+
+	fn getMinDistanceSquaredFloat(self: ChunkPosition, playerPosition: Vec3d) f64 {
 		const adjustedPosition = @mod(playerPosition + @as(Vec3d, @splat(1 << 31)), @as(Vec3d, @splat(1 << 32))) - @as(Vec3d, @splat(1 << 31));
 		const halfWidth: f64 = @floatFromInt(self.voxelSize*@divExact(chunkSize, 2));
 		var dx = @abs(@as(f64, @floatFromInt(self.wx)) + halfWidth - adjustedPosition[0]);
@@ -197,7 +208,7 @@ pub const ChunkPosition = struct { // MARK: ChunkPosition
 	}
 
 	pub fn getPriority(self: ChunkPosition, playerPos: Vec3d) f32 {
-		return -@as(f32, @floatCast(self.getMinDistanceSquared(playerPos)))/@as(f32, @floatFromInt(self.voxelSize*self.voxelSize)) + 2*@as(f32, @floatFromInt(std.math.log2_int(u31, self.voxelSize)*chunkSize*chunkSize));
+		return -@as(f32, @floatCast(self.getMinDistanceSquaredFloat(playerPos)))/@as(f32, @floatFromInt(self.voxelSize*self.voxelSize)) + 2*@as(f32, @floatFromInt(std.math.log2_int(u31, self.voxelSize)*chunkSize*chunkSize));
 	}
 };
 
@@ -281,7 +292,7 @@ pub const ServerChunk = struct { // MARK: ServerChunk
 				.voxelSizeMask = pos.voxelSize - 1,
 				.widthShift = voxelSizeShift + chunkShift,
 			},
-			.refCount = std.atomic.Value(u16).init(1),
+			.refCount = .init(1),
 		};
 		self.super.data.init();
 		return self;

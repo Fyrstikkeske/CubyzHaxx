@@ -45,9 +45,7 @@ pub const Compression = struct { // MARK: Compression
 				_ = try comp.write(&len);
 				_ = try comp.write(relPath);
 
-				const file = try sourceDir.openFile(relPath, .{});
-				defer file.close();
-				const fileData = try file.readToEndAlloc(main.stackAllocator.allocator, std.math.maxInt(u32));
+				const fileData = try sourceDir.readFileAlloc(main.stackAllocator.allocator, relPath, std.math.maxInt(usize));
 				defer main.stackAllocator.free(fileData);
 
 				std.mem.writeInt(u32, &len, @as(u32, @intCast(fileData.len)), .big);
@@ -78,9 +76,7 @@ pub const Compression = struct { // MARK: Compression
 			var splitter = std.mem.splitBackwardsScalar(u8, path, '/');
 			_ = splitter.first();
 			try outDir.makePath(splitter.rest());
-			const file = try outDir.createFile(path, .{});
-			defer file.close();
-			try file.writeAll(fileData);
+			try outDir.writeFile(.{.data = fileData, .sub_path = path});
 		}
 	}
 };
@@ -364,6 +360,12 @@ pub fn CircularBufferQueue(comptime T: type) type { // MARK: CircularBufferQueue
 			const result = self.mem[self.startIndex];
 			self.startIndex = (self.startIndex + 1) & self.mask;
 			return result;
+		}
+
+		pub fn dequeue_front(self: *Self) ?T {
+			if(self.startIndex == self.endIndex) return null;
+			self.endIndex = (self.endIndex -% 1) & self.mask;
+			return self.mem[self.endIndex];
 		}
 
 		pub fn peek(self: *Self) ?T {
@@ -725,7 +727,7 @@ pub const NeverFailingAllocator = struct { // MARK: NeverFailingAllocator
 	/// can be larger, smaller, or the same size as the old memory allocation.
 	/// If `new_n` is 0, this is the same as `free` and it always succeeds.
 	pub fn realloc(self: NeverFailingAllocator, old_mem: anytype, new_n: usize) t: {
-		const Slice = @typeInfo(@TypeOf(old_mem)).Pointer;
+		const Slice = @typeInfo(@TypeOf(old_mem)).pointer;
 		break :t []align(Slice.alignment) Slice.child;
 	} {
 		return self.allocator.realloc(old_mem, new_n) catch unreachable;
@@ -737,7 +739,7 @@ pub const NeverFailingAllocator = struct { // MARK: NeverFailingAllocator
 		new_n: usize,
 		return_address: usize,
 	) t: {
-		const Slice = @typeInfo(@TypeOf(old_mem)).Pointer;
+		const Slice = @typeInfo(@TypeOf(old_mem)).pointer;
 		break :t []align(Slice.alignment) Slice.child;
 	} {
 		return self.allocator.reallocAdvanced(old_mem, new_n, return_address) catch unreachable;
@@ -765,7 +767,7 @@ pub const NeverFailingArenaAllocator = struct { // MARK: NeverFailingArena
 
 	pub fn init(child_allocator: NeverFailingAllocator) NeverFailingArenaAllocator {
 		return .{
-			.arena = std.heap.ArenaAllocator.init(child_allocator.allocator),
+			.arena = .init(child_allocator.allocator),
 		};
 	}
 
@@ -802,7 +804,7 @@ pub const BufferFallbackAllocator = struct { // MARK: BufferFallbackAllocator
 
 	pub fn init(buffer: []u8, fallbackAllocator: NeverFailingAllocator) BufferFallbackAllocator {
 		return .{
-			.fixedBuffer = std.heap.FixedBufferAllocator.init(buffer),
+			.fixedBuffer = .init(buffer),
 			.fallbackAllocator = fallbackAllocator,
 		};
 	}
@@ -1010,6 +1012,12 @@ pub fn BlockingMaxHeap(comptime T: type) type { // MARK: BlockingMaxHeap
 }
 
 pub const ThreadPool = struct { // MARK: ThreadPool
+	pub const TaskType = enum(usize) {
+		chunkgen,
+		meshgenAndLighting,
+		misc,
+	};
+	pub const taskTypes = std.enums.directEnumArrayLen(TaskType, 0);
 	const Task = struct {
 		cachedPriority: f32,
 		self: *anyopaque,
@@ -1021,9 +1029,45 @@ pub const ThreadPool = struct { // MARK: ThreadPool
 	};
 	pub const VTable = struct {
 		getPriority: *const fn(*anyopaque) f32,
-		isStillNeeded: *const fn(*anyopaque, milliTime: i64) bool,
+		isStillNeeded: *const fn(*anyopaque) bool,
 		run: *const fn(*anyopaque) void,
 		clean: *const fn(*anyopaque) void,
+		taskType: TaskType = .misc,
+	};
+	pub const Performance = struct {
+		mutex: std.Thread.Mutex = .{},
+		tasks: [taskTypes]u32 = undefined,
+		utime: [taskTypes]i64 = undefined,
+
+		fn add(self: *Performance, task: TaskType, time: i64) void {
+			self.mutex.lock();
+			defer self.mutex.unlock();
+			const i = @intFromEnum(task);
+			self.tasks[i] += 1;
+			self.utime[i] += time;
+		}
+
+		pub fn clear(self: *Performance) void {
+			self.mutex.lock();
+			defer self.mutex.unlock();
+			for(0..taskTypes) |i| {
+				self.tasks[i] = 0;
+				self.utime[i] = 0;
+			}
+		}
+
+		fn init(allocator: NeverFailingAllocator) *Performance {
+			const self = allocator.create(Performance);
+			self.* = .{};
+			self.clear();
+			return self;
+		}
+
+		pub fn read(self: *Performance) Performance {
+			self.mutex.lock();
+			defer self.mutex.unlock();
+			return self.*;
+		}
 	};
 	const refreshTime: u32 = 100; // The time after which all priorities get refreshed in milliseconds.
 
@@ -1032,11 +1076,14 @@ pub const ThreadPool = struct { // MARK: ThreadPool
 	loadList: *BlockingMaxHeap(Task),
 	allocator: NeverFailingAllocator,
 
+	performance: *Performance,
+
 	pub fn init(allocator: NeverFailingAllocator, threadCount: usize) ThreadPool {
 		const self = ThreadPool {
 			.threads = allocator.alloc(std.Thread, threadCount),
 			.currentTasks = allocator.alloc(Atomic(?*const VTable), threadCount),
 			.loadList = BlockingMaxHeap(Task).init(allocator),
+			.performance = Performance.init(allocator),
 			.allocator = allocator,
 		};
 		for(self.threads, 0..) |*thread, i| {
@@ -1064,6 +1111,7 @@ pub const ThreadPool = struct { // MARK: ThreadPool
 		}
 		self.allocator.free(self.currentTasks);
 		self.allocator.free(self.threads);
+		self.allocator.destroy(self.performance);
 	}
 
 	pub fn closeAllTasksOfType(self: ThreadPool, vtable: *const VTable) void {
@@ -1098,7 +1146,10 @@ pub const ThreadPool = struct { // MARK: ThreadPool
 			{
 				const task = self.loadList.extractMax() catch break;
 				self.currentTasks[id].store(task.vtable, .monotonic);
+				const start = std.time.microTimestamp();
 				task.vtable.run(task.self);
+				const end = std.time.microTimestamp();
+				self.performance.add(task.vtable.taskType, end - start);
 				self.currentTasks[id].store(null, .monotonic);
 			}
 
@@ -1106,7 +1157,7 @@ pub const ThreadPool = struct { // MARK: ThreadPool
 				var temporaryTaskList = main.List(Task).init(main.stackAllocator);
 				defer temporaryTaskList.deinit();
 				while(self.loadList.extractAny()) |task| {
-					if(!task.vtable.isStillNeeded(task.self, lastUpdate)) {
+					if(!task.vtable.isStillNeeded(task.self)) {
 						task.vtable.clean(task.self);
 					} else {
 						const taskPtr = temporaryTaskList.addOne();
@@ -1178,7 +1229,7 @@ pub fn DynamicPackedIntArray(size: comptime_int) type { // MARK: DynamicPackedIn
 
 		pub fn resize(self: *Self, allocator: main.utils.NeverFailingAllocator, newBitSize: u5) void {
 			if(newBitSize == self.bitSize) return;
-			var newSelf: Self = Self.initCapacity(allocator, newBitSize);
+			var newSelf = Self.initCapacity(allocator, newBitSize);
 
 			for(0..size) |i| {
 				newSelf.setValue(i, self.getValue(i));
@@ -1262,6 +1313,21 @@ pub fn PaletteCompressedRegion(T: type, size: comptime_int) type { // MARK: Pale
 			};
 		}
 
+		pub fn initCapacity(self: *Self, paletteLength: u32) void {
+			std.debug.assert(paletteLength < 0x80000000 and paletteLength > 0);
+			const bitSize: u5 = @intCast(std.math.log2_int_ceil(u32, paletteLength));
+			const bufferLength = @as(u32, 1) << bitSize;
+			self.* = .{
+				.data = DynamicPackedIntArray(size).initCapacity(main.globalAllocator, bitSize),
+				.palette = main.globalAllocator.alloc(T, bufferLength),
+				.paletteOccupancy = main.globalAllocator.alloc(u32, bufferLength),
+				.paletteLength = paletteLength,
+				.activePaletteEntries = 1,
+			};
+			self.palette[0] = std.mem.zeroes(T);
+			self.paletteOccupancy[0] = size;
+		}
+
 		pub fn deinit(self: *Self) void {
 			self.data.deinit(main.globalAllocator);
 			main.globalAllocator.free(self.palette);
@@ -1293,6 +1359,20 @@ pub fn PaletteCompressedRegion(T: type, size: comptime_int) type { // MARK: Pale
 				std.debug.assert(self.paletteLength <= self.palette.len);
 			}
 			return paletteIndex;
+		}
+
+		pub fn setRawValue(noalias self: *Self, i: usize, paletteIndex: u32) void {
+			const previousPaletteIndex = self.data.setAndGetValue(i, paletteIndex);
+			if(previousPaletteIndex != paletteIndex) {
+				if(self.paletteOccupancy[paletteIndex] == 0) {
+					self.activePaletteEntries += 1;
+				}
+				self.paletteOccupancy[paletteIndex] += 1;
+				self.paletteOccupancy[previousPaletteIndex] -= 1;
+				if(self.paletteOccupancy[previousPaletteIndex] == 0) {
+					self.activePaletteEntries -= 1;
+				}
+			}
 		}
 
 		pub fn setValue(noalias self: *Self, i: usize, val: T) void {
@@ -1430,8 +1510,8 @@ pub fn Cache(comptime T: type, comptime numberOfBuckets: u32, comptime bucketSiz
 
 	return struct {
 		buckets: [numberOfBuckets]Bucket = [_]Bucket {Bucket{}} ** numberOfBuckets,
-		cacheRequests: Atomic(usize) = Atomic(usize).init(0),
-		cacheMisses: Atomic(usize) = Atomic(usize).init(0),
+		cacheRequests: Atomic(usize) = .init(0),
+		cacheMisses: Atomic(usize) = .init(0),
 
 		///  Tries to find the entry that fits to the supplied hashable.
 		pub fn find(self: *@This(), compareAndHash: anytype, comptime postGetFunction: ?fn(*T) void) ?*T {
@@ -1630,7 +1710,7 @@ pub fn GenericInterpolation(comptime elements: comptime_int) type { // MARK: Gen
 }
 
 pub const TimeDifference = struct { // MARK: TimeDifference
-	difference: Atomic(i16) = Atomic(i16).init(0),
+	difference: Atomic(i16) = .init(0),
 	firstValue: bool = true,
 
 	pub fn addDataPoint(self: *TimeDifference, time: i16) void {

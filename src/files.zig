@@ -2,22 +2,22 @@ const std = @import("std");
 
 const main = @import("root");
 const NeverFailingAllocator = main.utils.NeverFailingAllocator;
-const JsonElement = main.JsonElement;
+const ZonElement = main.ZonElement;
 
 pub fn read(allocator: NeverFailingAllocator, path: []const u8) ![]u8 {
 	return cwd().read(allocator, path);
 }
 
-pub fn readToJson(allocator: NeverFailingAllocator, path: []const u8) !JsonElement {
-	return cwd().readToJson(allocator, path);
+pub fn readToZon(allocator: NeverFailingAllocator, path: []const u8) !ZonElement {
+	return cwd().readToZon(allocator, path);
 }
 
 pub fn write(path: []const u8, data: []const u8) !void {
 	try cwd().write(path, data);
 }
 
-pub fn writeJson(path: []const u8, json: JsonElement) !void {
-	try cwd().writeJson(path, json);
+pub fn writeZon(path: []const u8, zon: ZonElement) !void {
+	try cwd().writeZon(path, zon);
 }
 
 pub fn openDir(path: []const u8) !Dir {
@@ -50,25 +50,21 @@ pub const Dir = struct {
 	}
 
 	pub fn read(self: Dir, allocator: NeverFailingAllocator, path: []const u8) ![]u8 {
-		const file = try self.dir.openFile(path, .{});
-		defer file.close();
-		return file.readToEndAlloc(allocator.allocator, std.math.maxInt(usize)) catch unreachable;
+		return self.dir.readFileAlloc(allocator.allocator, path, std.math.maxInt(usize));
 	}
 
-	pub fn readToJson(self: Dir, allocator: NeverFailingAllocator, path: []const u8) !JsonElement {
+	pub fn readToZon(self: Dir, allocator: NeverFailingAllocator, path: []const u8) !ZonElement {
 		const string = try self.read(main.stackAllocator, path);
 		defer main.stackAllocator.free(string);
-		return JsonElement.parseFromString(allocator, string);
+		return ZonElement.parseFromString(allocator, string);
 	}
 
 	pub fn write(self: Dir, path: []const u8, data: []const u8) !void {
-		const file = try self.dir.createFile(path, .{});
-		defer file.close();
-		try file.writeAll(data);
+		return self.dir.writeFile(.{.data = data, .sub_path = path});
 	}
 
-	pub fn writeJson(self: Dir, path: []const u8, json: JsonElement) !void {
-		const string = json.toString(main.stackAllocator);
+	pub fn writeZon(self: Dir, path: []const u8, zon: ZonElement) !void {
+		const string = zon.toString(main.stackAllocator);
 		defer main.stackAllocator.free(string);
 		try self.write(path, string);
 	}

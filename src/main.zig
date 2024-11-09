@@ -22,6 +22,7 @@ pub const rotation = @import("rotation.zig");
 pub const settings = @import("settings.zig");
 pub const utils = @import("utils.zig");
 pub const vec = @import("vec.zig");
+pub const ZonElement = @import("zon.zig").ZonElement;
 
 pub const Window = @import("graphics/Window.zig");
 
@@ -56,7 +57,7 @@ pub const std_options: std.Options = .{ // MARK: std_options
 	.log_level = .debug,
 	.logFn = struct {pub fn logFn(
 		comptime level: std.log.Level,
-		comptime _: @Type(.EnumLiteral),
+		comptime _: @Type(.enum_literal),
 		comptime format: []const u8,
 		args: anytype,
 	) void {
@@ -125,10 +126,10 @@ pub const std_options: std.Options = .{ // MARK: std_options
 				types = types ++ &[_]type{i64};
 			} else if(@TypeOf(args[i_1]) == comptime_float) {
 				types = types ++ &[_]type{f64};
-			} else if(TI == .Pointer and TI.Pointer.size == .Slice and TI.Pointer.child == u8) {
+			} else if(TI == .pointer and TI.pointer.size == .Slice and TI.pointer.child == u8) {
 				types = types ++ &[_]type{[]const u8};
-			} else if(TI == .Int and TI.Int.bits <= 64) {
-				if(TI.Int.signedness == .signed) {
+			} else if(TI == .int and TI.int.bits <= 64) {
+				if(TI.int.signedness == .signed) {
 					types = types ++ &[_]type{i64};
 				} else {
 					types = types ++ &[_]type{u64};
@@ -265,8 +266,20 @@ fn openWorkbench() void {
 }
 fn openCreativeInventory() void {
 	if(game.world == null) return;
+	if(!game.Player.isCreative()) return;
 	gui.toggleGameMenu();
 	gui.openWindow("creative_inventory");
+}
+fn openSharedInventoryTesting() void {
+	if(game.world == null) return;
+	ungrabMouse();
+	gui.openWindow("shared_inventory_testing");
+}
+fn openChat() void {
+	if(game.world == null) return;
+	ungrabMouse();
+	gui.openWindow("chat");
+	gui.windowlist.chat.input.select();
 }
 fn takeBackgroundImageFn() void {
 	if(game.world == null) return;
@@ -290,6 +303,13 @@ fn toggleNetworkDebugOverlay() void {
 fn toggleAdvancedNetworkDebugOverlay() void {
 	gui.toggleWindow("debug_network_advanced");
 }
+fn cycleHotbarSlot(i: comptime_int) *const fn() void {
+	return &struct {
+		fn set() void {
+			game.Player.selectedSlot = @intCast(@mod(@as(i33, game.Player.selectedSlot) + i, 12));
+		}
+	}.set;
+}
 fn setHotbarSlot(i: comptime_int) *const fn() void {
 	return &struct {
 		fn set() void {
@@ -302,30 +322,39 @@ pub const KeyBoard = struct { // MARK: KeyBoard
 	const c = Window.c;
 	pub var keys = [_]Window.Key {
 		// Gameplay:
-		.{.name = "forward", .key = c.GLFW_KEY_W},
-		.{.name = "left", .key = c.GLFW_KEY_A},
-		.{.name = "backward", .key = c.GLFW_KEY_S},
-		.{.name = "right", .key = c.GLFW_KEY_D},
-		.{.name = "sprint", .key = c.GLFW_KEY_LEFT_CONTROL},
-		.{.name = "jump", .key = c.GLFW_KEY_SPACE},
-		.{.name = "fly", .key = c.GLFW_KEY_F, .pressAction = &game.flyToggle},
+		.{.name = "forward", .key = c.GLFW_KEY_W, .gamepadAxis = .{.axis = c.GLFW_GAMEPAD_AXIS_LEFT_Y, .positive = false}},
+		.{.name = "left", .key = c.GLFW_KEY_A, .gamepadAxis = .{.axis = c.GLFW_GAMEPAD_AXIS_LEFT_X, .positive = false}},
+		.{.name = "backward", .key = c.GLFW_KEY_S, .gamepadAxis = .{.axis = c.GLFW_GAMEPAD_AXIS_LEFT_Y, .positive = true}},
+		.{.name = "right", .key = c.GLFW_KEY_D, .gamepadAxis = .{.axis = c.GLFW_GAMEPAD_AXIS_LEFT_X, .positive = true}},
+		.{.name = "sprint", .key = c.GLFW_KEY_LEFT_CONTROL, .gamepadButton = c.GLFW_GAMEPAD_BUTTON_LEFT_THUMB},
+		.{.name = "jump", .key = c.GLFW_KEY_SPACE, .gamepadButton = c.GLFW_GAMEPAD_BUTTON_A},
+		.{.name = "fly", .key = c.GLFW_KEY_F, .gamepadButton = c.GLFW_GAMEPAD_BUTTON_DPAD_DOWN, .pressAction = &game.flyToggle},
 		.{.name = "ghost", .key = c.GLFW_KEY_G, .pressAction = &game.ghostToggle},
 		.{.name = "hyperSpeed", .key = c.GLFW_KEY_H, .pressAction = &game.hyperSpeedToggle},
-		.{.name = "fall", .key = c.GLFW_KEY_LEFT_SHIFT},
-		.{.name = "shift", .key = c.GLFW_KEY_LEFT_SHIFT},
-		.{.name = "fullscreen", .key = c.GLFW_KEY_F11, .releaseAction = &Window.toggleFullscreen},
-		.{.name = "placeBlock", .mouseButton = c.GLFW_MOUSE_BUTTON_RIGHT, .pressAction = &game.pressPlace, .releaseAction = &game.releasePlace},
-		.{.name = "breakBlock", .mouseButton = c.GLFW_MOUSE_BUTTON_LEFT, .pressAction = &game.pressBreak, .releaseAction = &game.releaseBreak},
-		.{.name = "acquireSelectedBlock", .mouseButton = c.GLFW_MOUSE_BUTTON_MIDDLE, .pressAction = &game.pressAcquireSelectedBlock},
+		.{.name = "gamemode", .key = c.GLFW_KEY_M, .pressAction = &game.gamemodeToggle},
+		.{.name = "fall", .key = c.GLFW_KEY_LEFT_SHIFT, .gamepadButton = c.GLFW_GAMEPAD_BUTTON_RIGHT_THUMB},
+		.{.name = "shift", .key = c.GLFW_KEY_LEFT_SHIFT, .gamepadButton = c.GLFW_GAMEPAD_BUTTON_RIGHT_THUMB},
+		.{.name = "fullscreen", .key = c.GLFW_KEY_F11, .pressAction = &Window.toggleFullscreen},
+		.{.name = "placeBlock", .mouseButton = c.GLFW_MOUSE_BUTTON_RIGHT, .gamepadAxis = .{.axis = c.GLFW_GAMEPAD_AXIS_LEFT_TRIGGER}, .pressAction = &game.pressPlace, .releaseAction = &game.releasePlace},
+		.{.name = "breakBlock", .mouseButton = c.GLFW_MOUSE_BUTTON_LEFT, .gamepadAxis = .{.axis = c.GLFW_GAMEPAD_AXIS_RIGHT_TRIGGER}, .pressAction = &game.pressBreak, .releaseAction = &game.releaseBreak},
+		.{.name = "acquireSelectedBlock", .mouseButton = c.GLFW_MOUSE_BUTTON_MIDDLE, .gamepadButton = c.GLFW_GAMEPAD_BUTTON_DPAD_LEFT, .pressAction = &game.pressAcquireSelectedBlock},
 
-		.{.name = "takeBackgroundImage", .key = c.GLFW_KEY_PRINT_SCREEN, .releaseAction = &takeBackgroundImageFn},
+		.{.name = "takeBackgroundImage", .key = c.GLFW_KEY_PRINT_SCREEN, .pressAction = &takeBackgroundImageFn},
 
 		// Gui:
-		.{.name = "escape", .key = c.GLFW_KEY_ESCAPE, .releaseAction = &escape},
-		.{.name = "openInventory", .key = c.GLFW_KEY_E, .releaseAction = &openInventory},
-		.{.name = "openCreativeInventory(aka cheat inventory)", .key = c.GLFW_KEY_C, .releaseAction = &openCreativeInventory},
-		.{.name = "mainGuiButton", .mouseButton = c.GLFW_MOUSE_BUTTON_LEFT, .pressAction = &gui.mainButtonPressed, .releaseAction = &gui.mainButtonReleased},
-		.{.name = "secondaryGuiButton", .mouseButton = c.GLFW_MOUSE_BUTTON_RIGHT, .pressAction = &gui.secondaryButtonPressed, .releaseAction = &gui.secondaryButtonReleased},
+		.{.name = "escape", .key = c.GLFW_KEY_ESCAPE, .pressAction = &escape, .gamepadButton = c.GLFW_GAMEPAD_BUTTON_B},
+		.{.name = "openInventory", .key = c.GLFW_KEY_E, .pressAction = &openInventory, .gamepadButton = c.GLFW_GAMEPAD_BUTTON_X},
+		.{.name = "openCreativeInventory(aka cheat inventory)", .key = c.GLFW_KEY_C, .pressAction = &openCreativeInventory, .gamepadButton = c.GLFW_GAMEPAD_BUTTON_Y},
+		.{.name = "openChat", .key = c.GLFW_KEY_T, .pressAction = &openChat},
+		.{.name = "mainGuiButton", .mouseButton = c.GLFW_MOUSE_BUTTON_LEFT, .pressAction = &gui.mainButtonPressed, .releaseAction = &gui.mainButtonReleased, .gamepadButton = c.GLFW_GAMEPAD_BUTTON_A},
+		.{.name = "secondaryGuiButton", .mouseButton = c.GLFW_MOUSE_BUTTON_RIGHT, .pressAction = &gui.secondaryButtonPressed, .releaseAction = &gui.secondaryButtonReleased, .gamepadButton = c.GLFW_GAMEPAD_BUTTON_Y},
+		// gamepad gui.
+		.{.name = "scrollUp", .gamepadAxis = .{.axis = c.GLFW_GAMEPAD_AXIS_RIGHT_Y, .positive = false}},
+		.{.name = "scrollDown", .gamepadAxis = .{.axis = c.GLFW_GAMEPAD_AXIS_RIGHT_Y, .positive = true}},
+		.{.name = "uiUp", .gamepadAxis = .{.axis = c.GLFW_GAMEPAD_AXIS_LEFT_Y, .positive = false}},
+		.{.name = "uiLeft", .gamepadAxis = .{.axis = c.GLFW_GAMEPAD_AXIS_LEFT_X, .positive = false}},
+		.{.name = "uiDown",  .gamepadAxis = .{.axis = c.GLFW_GAMEPAD_AXIS_LEFT_Y, .positive = true}},
+		.{.name = "uiRight", .gamepadAxis = .{.axis = c.GLFW_GAMEPAD_AXIS_LEFT_X, .positive = true}},
 		// text:
 		.{.name = "textCursorLeft", .key = c.GLFW_KEY_LEFT, .repeatAction = &gui.textCallbacks.left},
 		.{.name = "textCursorRight", .key = c.GLFW_KEY_RIGHT, .repeatAction = &gui.textCallbacks.right},
@@ -342,26 +371,33 @@ pub const KeyBoard = struct { // MARK: KeyBoard
 		.{.name = "textNewline", .key = c.GLFW_KEY_ENTER, .repeatAction = &gui.textCallbacks.newline},
 
 		// Hotbar shortcuts:
-		.{.name = "Hotbar 1", .key = c.GLFW_KEY_1, .releaseAction = setHotbarSlot(1)},
-		.{.name = "Hotbar 2", .key = c.GLFW_KEY_2, .releaseAction = setHotbarSlot(2)},
-		.{.name = "Hotbar 3", .key = c.GLFW_KEY_3, .releaseAction = setHotbarSlot(3)},
-		.{.name = "Hotbar 4", .key = c.GLFW_KEY_4, .releaseAction = setHotbarSlot(4)},
-		.{.name = "Hotbar 5", .key = c.GLFW_KEY_5, .releaseAction = setHotbarSlot(5)},
-		.{.name = "Hotbar 6", .key = c.GLFW_KEY_6, .releaseAction = setHotbarSlot(6)},
-		.{.name = "Hotbar 7", .key = c.GLFW_KEY_7, .releaseAction = setHotbarSlot(7)},
-		.{.name = "Hotbar 8", .key = c.GLFW_KEY_8, .releaseAction = setHotbarSlot(8)},
-		.{.name = "Hotbar 9", .key = c.GLFW_KEY_9, .releaseAction = setHotbarSlot(9)},
-		.{.name = "Hotbar 10", .key = c.GLFW_KEY_0, .releaseAction = setHotbarSlot(10)},
-		.{.name = "Hotbar 11", .key = c.GLFW_KEY_MINUS, .releaseAction = setHotbarSlot(11)},
-		.{.name = "Hotbar 12", .key = c.GLFW_KEY_EQUAL, .releaseAction = setHotbarSlot(12)},
-
+		.{.name = "Hotbar 1", .key = c.GLFW_KEY_1, .pressAction = setHotbarSlot(1)},
+		.{.name = "Hotbar 2", .key = c.GLFW_KEY_2, .pressAction = setHotbarSlot(2)},
+		.{.name = "Hotbar 3", .key = c.GLFW_KEY_3, .pressAction = setHotbarSlot(3)},
+		.{.name = "Hotbar 4", .key = c.GLFW_KEY_4, .pressAction = setHotbarSlot(4)},
+		.{.name = "Hotbar 5", .key = c.GLFW_KEY_5, .pressAction = setHotbarSlot(5)},
+		.{.name = "Hotbar 6", .key = c.GLFW_KEY_6, .pressAction = setHotbarSlot(6)},
+		.{.name = "Hotbar 7", .key = c.GLFW_KEY_7, .pressAction = setHotbarSlot(7)},
+		.{.name = "Hotbar 8", .key = c.GLFW_KEY_8, .pressAction = setHotbarSlot(8)},
+		.{.name = "Hotbar 9", .key = c.GLFW_KEY_9, .pressAction = setHotbarSlot(9)},
+		.{.name = "Hotbar 10", .key = c.GLFW_KEY_0, .pressAction = setHotbarSlot(10)},
+		.{.name = "Hotbar 11", .key = c.GLFW_KEY_MINUS, .pressAction = setHotbarSlot(11)},
+		.{.name = "Hotbar 12", .key = c.GLFW_KEY_EQUAL, .pressAction = setHotbarSlot(12)},
+		.{.name = "Hotbar left", .gamepadButton = c.GLFW_GAMEPAD_BUTTON_LEFT_BUMPER, .pressAction = cycleHotbarSlot(-1)},
+		.{.name = "Hotbar right", .gamepadButton = c.GLFW_GAMEPAD_BUTTON_RIGHT_BUMPER, .pressAction = cycleHotbarSlot(1)},
+		.{.name = "cameraLeft", .gamepadAxis = .{.axis = c.GLFW_GAMEPAD_AXIS_RIGHT_X, .positive = false}},
+		.{.name = "cameraRight", .gamepadAxis = .{.axis = c.GLFW_GAMEPAD_AXIS_RIGHT_X, .positive = true}},
+		.{.name = "cameraUp", .gamepadAxis = .{.axis = c.GLFW_GAMEPAD_AXIS_RIGHT_Y, .positive = false}},
+		.{.name = "cameraDown", .gamepadAxis = .{.axis = c.GLFW_GAMEPAD_AXIS_RIGHT_Y, .positive = true}},
 		// debug:
-		.{.name = "hideMenu", .key = c.GLFW_KEY_F1, .releaseAction = &toggleHideGui},
-		.{.name = "debugOverlay", .key = c.GLFW_KEY_F3, .releaseAction = &toggleDebugOverlay},
-		.{.name = "performanceOverlay", .key = c.GLFW_KEY_F4, .releaseAction = &togglePerformanceOverlay},
-		.{.name = "gpuPerformanceOverlay", .key = c.GLFW_KEY_F5, .releaseAction = &toggleGPUPerformanceOverlay},
-		.{.name = "networkDebugOverlay", .key = c.GLFW_KEY_F6, .releaseAction = &toggleNetworkDebugOverlay},
-		.{.name = "advancedNetworkDebugOverlay", .key = c.GLFW_KEY_F7, .releaseAction = &toggleAdvancedNetworkDebugOverlay},
+		.{.name = "hideMenu", .key = c.GLFW_KEY_F1, .pressAction = &toggleHideGui},
+		.{.name = "debugOverlay", .key = c.GLFW_KEY_F3, .pressAction = &toggleDebugOverlay},
+		.{.name = "performanceOverlay", .key = c.GLFW_KEY_F4, .pressAction = &togglePerformanceOverlay},
+		.{.name = "gpuPerformanceOverlay", .key = c.GLFW_KEY_F5, .pressAction = &toggleGPUPerformanceOverlay},
+		.{.name = "networkDebugOverlay", .key = c.GLFW_KEY_F6, .pressAction = &toggleNetworkDebugOverlay},
+		.{.name = "advancedNetworkDebugOverlay", .key = c.GLFW_KEY_F7, .pressAction = &toggleAdvancedNetworkDebugOverlay},
+
+		.{.name = "shared_inventory_testing", .key = c.GLFW_KEY_O, .pressAction = &openSharedInventoryTesting},
 	};
 
 	pub fn key(name: []const u8) *const Window.Key { // TODO: Maybe I should use a hashmap here?
@@ -385,6 +421,93 @@ pub fn exitToMenu(_: usize) void {
 	shouldExitToMenu.store(true, .monotonic);
 }
 
+
+fn isValidIdentifierName(str: []const u8) bool { // TODO: Remove after #480
+	if(str.len == 0) return false;
+	if(!std.ascii.isAlphabetic(str[0]) and str[0] != '_') return false;
+	for(str[1..]) |c| {
+		if(!std.ascii.isAlphanumeric(c) and c != '_') return false;
+	}
+	return true;
+}
+
+fn isHiddenOrParentHiddenPosix(path: []const u8) bool {
+	var iter = std.fs.path.componentIterator(path) catch |err| {
+		std.log.err("Cannot iterate on path {s}: {s}!", .{path, @errorName(err)});
+		return false;
+	};
+	while (iter.next()) |component| {
+		if (std.mem.eql(u8, component.name, ".") or std.mem.eql(u8, component.name, "..")) {
+			continue;
+		}
+		if (component.name.len > 0 and component.name[0] == '.') {
+			return true;
+		}
+	}
+	return false;
+}
+pub fn convertJsonToZon(jsonPath: []const u8) void { // TODO: Remove after #480
+	if (isHiddenOrParentHiddenPosix(jsonPath)) {
+		std.log.info("NOT converting {s}.", .{jsonPath});
+		return;
+	}
+	std.log.info("Converting {s}:", .{jsonPath});
+	const jsonString = files.read(stackAllocator, jsonPath) catch |err| {
+		std.log.err("Could convert file {s}: {s}", .{jsonPath, @errorName(err)});
+		return;
+	};
+	defer stackAllocator.free(jsonString);
+	var zonString = List(u8).init(stackAllocator);
+	defer zonString.deinit();
+	std.log.debug("{s}", .{jsonString});
+
+	var i: usize = 0;
+	while(i < jsonString.len) : (i += 1) {
+		switch(jsonString[i]) {
+			'\"' => {
+				var j = i + 1;
+				while(j < jsonString.len and jsonString[j] != '"') : (j += 1) {}
+				const string = jsonString[i+1..j];
+				if(isValidIdentifierName(string)) {
+					zonString.append('.');
+					zonString.appendSlice(string);
+				} else {
+					zonString.append('"');
+					zonString.appendSlice(string);
+					zonString.append('"');
+				}
+				i = j;
+			},
+			'[', '{' => {
+				zonString.append('.');
+				zonString.append('{');
+			},
+			']', '}' => {
+				zonString.append('}');
+			},
+			':' => {
+				zonString.append('=');
+			},
+			else => |c| {
+				zonString.append(c);
+			},
+		}
+	}
+	const zonPath = std.fmt.allocPrint(stackAllocator.allocator, "{s}.zig.zon", .{jsonPath[0..std.mem.lastIndexOfScalar(u8, jsonPath, '.') orelse unreachable]}) catch unreachable;
+	defer stackAllocator.free(zonPath);
+	std.log.info("Outputting to {s}:", .{zonPath});
+	std.log.debug("{s}", .{zonString.items});
+	files.write(zonPath, zonString.items) catch |err| {
+		std.log.err("Got error while writing to file: {s}", .{@errorName(err)});
+		return;
+	};
+	std.log.info("Deleting file {s}", .{jsonPath});
+	std.fs.cwd().deleteFile(jsonPath) catch |err| {
+		std.log.err("Got error while deleting file: {s}", .{@errorName(err)});
+		return;
+	};
+}
+
 pub fn main() void { // MARK: main()
 	seed = @bitCast(std.time.milliTimestamp());
 	defer if(global_gpa.deinit() == .leak) {
@@ -396,6 +519,27 @@ pub fn main() void { // MARK: main()
 
 	initLogging();
 	defer deinitLogging();
+
+	if(std.fs.cwd().openFile("settings.json", .{})) |file| blk: { // TODO: Remove after #480
+		file.close();
+		std.log.warn("Detected old game client. Converting all .json files to .zig.zon", .{});
+		var dir = std.fs.cwd().openDir(".", .{.iterate = true}) catch |err| {
+			std.log.err("Could not open game directory to convert json files: {s}. Conversion aborted", .{@errorName(err)});
+			break :blk;
+		};
+		defer dir.close();
+
+		var walker = dir.walk(stackAllocator.allocator) catch unreachable;
+		defer walker.deinit();
+		while(walker.next() catch |err| {
+			std.log.err("Got error while iterating through json files directory: {s}", .{@errorName(err)});
+			break :blk;
+		}) |entry| {
+			if(entry.kind == .file and (std.ascii.endsWithIgnoreCase(entry.basename, ".json") or std.mem.eql(u8, entry.basename, "world.dat")) and !std.ascii.startsWithIgnoreCase(entry.path, "compiler") and !std.ascii.startsWithIgnoreCase(entry.path, ".zig-cache") and !std.ascii.startsWithIgnoreCase(entry.path, ".vscode")) {
+				convertJsonToZon(entry.path);
+			}
+		}
+	} else |_| {}
 
 	settings.init();
 	defer settings.deinit();
@@ -414,9 +558,6 @@ pub fn main() void { // MARK: main()
 
 	audio.init() catch std.log.err("Failed to initialize audio. Continuing the game without sounds.", .{});
 	defer audio.deinit();
-
-	gui.init();
-	defer gui.deinit();
 
 	chunk.init();
 	defer chunk.deinit();
@@ -446,6 +587,9 @@ pub fn main() void { // MARK: main()
 
 	entity.ClientEntityManager.init();
 	defer entity.ClientEntityManager.deinit();
+
+	gui.init();
+	defer gui.deinit();
 
 	if(settings.playerName.len == 0) {
 		gui.openWindow("change_name");
@@ -504,7 +648,8 @@ pub fn main() void { // MARK: main()
 		lastDeltaTime.store(deltaTime, .monotonic);
 		lastBeginRendering = begin;
 
-		Window.handleEvents();
+		Window.handleEvents(deltaTime);
+
 		file_monitor.handleEvents();
 
 		if(game.world != null) { // Update the game
@@ -542,4 +687,5 @@ pub fn main() void { // MARK: main()
 
 test "abc" {
 	_ = @import("json.zig");
+	_ = @import("zon.zig");
 }

@@ -9,7 +9,7 @@ const entity = @import("entity.zig");
 const items = @import("items.zig");
 const Inventory = items.Inventory;
 const ItemStack = items.ItemStack;
-const JsonElement = @import("json.zig").JsonElement;
+const ZonElement = @import("zon.zig").ZonElement;
 const main = @import("main.zig");
 const game = @import("game.zig");
 const settings = @import("settings.zig");
@@ -113,7 +113,7 @@ const Socket = struct {
 
 pub fn init() void {
 	Socket.startup();
-	inline for(@typeInfo(Protocols).Struct.decls) |decl| {
+	inline for(@typeInfo(Protocols).@"struct".decls) |decl| {
 		if(@TypeOf(@field(Protocols, decl.name)) == type) {
 			const id = @field(Protocols, decl.name).id;
 			if(id != Protocols.keepAlive and id != Protocols.important and Protocols.list[id] == null) {
@@ -150,72 +150,50 @@ const Request = struct {
 /// Reference: https://datatracker.ietf.org/doc/html/rfc5389
 const STUN = struct { // MARK: STUN
 	const ipServerList = [_][]const u8 {
-		"iphone-stun.strato-iphone.de:3478",
-		"stun.12connect.com:3478",
 		"stun.12voip.com:3478",
 		"stun.1und1.de:3478",
 		"stun.acrobits.cz:3478",
 		"stun.actionvoip.com:3478",
-		"stun.altar.com.pl:3478",
 		"stun.antisip.com:3478",
 		"stun.avigora.fr:3478",
 		"stun.bluesip.net:3478",
 		"stun.cablenet-as.net:3478",
 		"stun.callromania.ro:3478",
-		"stun.callwithus.com:3478",
 		"stun.cheapvoip.com:3478",
-		"stun.cloopen.com:3478",
-		"stun.commpeak.com:3478",
 		"stun.cope.es:3478",
 		"stun.counterpath.com:3478",
 		"stun.counterpath.net:3478",
 		"stun.dcalling.de:3478",
-		"stun.demos.ru:3478",
 		"stun.dus.net:3478",
-		"stun.easycall.pl:3478",
-		"stun.easyvoip.com:3478",
 		"stun.ekiga.net:3478",
 		"stun.epygi.com:3478",
-		"stun.etoilediese.fr:3478",
-		"stun.freecall.com:3478",
 		"stun.freeswitch.org:3478",
 		"stun.freevoipdeal.com:3478",
 		"stun.gmx.de:3478",
 		"stun.gmx.net:3478",
 		"stun.halonet.pl:3478",
 		"stun.hoiio.com:3478",
-		"stun.hosteurope.de:3478",
-		"stun.infra.net:3478",
 		"stun.internetcalls.com:3478",
 		"stun.intervoip.com:3478",
 		"stun.ipfire.org:3478",
 		"stun.ippi.fr:3478",
 		"stun.ipshka.com:3478",
 		"stun.it1.hr:3478",
-		"stun.ivao.aero:3478",
 		"stun.jumblo.com:3478",
 		"stun.justvoip.com:3478",
 		"stun.l.google.com:19302",
 		"stun.linphone.org:3478",
 		"stun.liveo.fr:3478",
 		"stun.lowratevoip.com:3478",
-		"stun.lundimatin.fr:3478",
-		"stun.mit.de:3478",
-		"stun.miwifi.com:3478",
 		"stun.myvoiptraffic.com:3478",
 		"stun.netappel.com:3478",
 		"stun.netgsm.com.tr:3478",
 		"stun.nfon.net:3478",
 		"stun.nonoh.net:3478",
-		"stun.nottingham.ac.uk:3478",
-		"stun.ooma.com:3478",
 		"stun.ozekiphone.com:3478",
 		"stun.pjsip.org:3478",
-		"stun.poivy.com:3478",
 		"stun.powervoip.com:3478",
 		"stun.ppdi.com:3478",
-		"stun.qq.com:3478",
-		"stun.rackco.com:3478",
 		"stun.rockenstein.de:3478",
 		"stun.rolmail.net:3478",
 		"stun.rynga.com:3478",
@@ -226,8 +204,6 @@ const STUN = struct { // MARK: STUN
 		"stun.sipgate.net:10000",
 		"stun.sipgate.net:3478",
 		"stun.siplogin.de:3478",
-		"stun.sipnet.net:3478",
-		"stun.sippeer.dk:3478",
 		"stun.siptraffic.com:3478",
 		"stun.smartvoip.com:3478",
 		"stun.smsdiscount.com:3478",
@@ -235,17 +211,12 @@ const STUN = struct { // MARK: STUN
 		"stun.solnet.ch:3478",
 		"stun.sonetel.com:3478",
 		"stun.sonetel.net:3478",
-		"stun.sovtest.ru:3478",
 		"stun.srce.hr:3478",
-		"stun.stunprotocol.org:3478",
 		"stun.t-online.de:3478",
 		"stun.tel.lu:3478",
 		"stun.telbo.com:3478",
 		"stun.tng.de:3478",
 		"stun.twt.it:3478",
-		"stun.uls.co.za:3478",
-		"stun.usfamily.net:3478",
-		"stun.vivox.com:3478",
 		"stun.vo.lu:3478",
 		"stun.voicetrading.com:3478",
 		"stun.voip.aebc.com:3478",
@@ -268,7 +239,6 @@ const STUN = struct { // MARK: STUN
 		"stun.voys.nl:3478",
 		"stun.voztele.com:3478",
 		"stun.webcalldirect.com:3478",
-		"stun.wifirst.net:3478",
 		"stun.zadarma.com:3478",
 		"stun1.l.google.com:19302",
 		"stun2.l.google.com:19302",
@@ -390,8 +360,8 @@ pub const ConnectionManager = struct { // MARK: ConnectionManager
 	thread: std.Thread = undefined,
 	threadId: std.Thread.Id = undefined,
 	externalAddress: Address = undefined,
-	online: Atomic(bool) = Atomic(bool).init(false),
-	running: Atomic(bool) = Atomic(bool).init(true),
+	online: Atomic(bool) = .init(false),
+	running: Atomic(bool) = .init(true),
 
 	connections: main.List(*Connection) = undefined,
 	requests: main.List(*Request) = undefined,
@@ -421,9 +391,9 @@ pub const ConnectionManager = struct { // MARK: ConnectionManager
 		const result: *ConnectionManager = main.globalAllocator.create(ConnectionManager);
 		errdefer main.globalAllocator.destroy(result);
 		result.* = .{};
-		result.connections = main.List(*Connection).init(main.globalAllocator);
-		result.requests = main.List(*Request).init(main.globalAllocator);
-		result.packetSendRequests = std.PriorityQueue(PacketSendRequest, void, PacketSendRequest.compare).init(main.globalAllocator.allocator, {});
+		result.connections = .init(main.globalAllocator);
+		result.requests = .init(main.globalAllocator);
+		result.packetSendRequests = .init(main.globalAllocator.allocator, {});
 
 		result.localPort = localPort;
 		result.socket = Socket.init(localPort) catch |err| blk: {
@@ -593,6 +563,8 @@ pub const ConnectionManager = struct { // MARK: ConnectionManager
 			} else |err| {
 				if(err == error.Timeout) {
 					// No message within the last ~100 ms.
+				} else if(err == error.ConnectionResetByPeer) {
+					std.log.warn("Got error.ConnectionResetByPeer on receive. This indicates that a previous message did not find a valid destination.", .{});
 				} else {
 					std.log.err("Got error on receive: {s}", .{@errorName(err)});
 					@panic("Network failed.");
@@ -650,8 +622,8 @@ const UnconfirmedPacket = struct {
 };
 
 // MARK: Protocols
-pub var bytesReceived: [256]Atomic(usize) = [_]Atomic(usize) {Atomic(usize).init(0)} ** 256;
-pub var packetsReceived: [256]Atomic(usize) = [_]Atomic(usize) {Atomic(usize).init(0)} ** 256;
+pub var bytesReceived: [256]Atomic(usize) = .{Atomic(usize).init(0)} ** 256;
+pub var packetsReceived: [256]Atomic(usize) = .{Atomic(usize).init(0)} ** 256;
 pub const Protocols = struct {
 	pub var list: [256]?*const fn(*Connection, []const u8) anyerror!void = [_]?*const fn(*Connection, []const u8) anyerror!void {null} ** 256;
 	pub var isAsynchronous: [256]bool = .{false} ** 256;
@@ -672,10 +644,10 @@ pub const Protocols = struct {
 				conn.handShakeState.store(data[0], .monotonic);
 				switch(data[0]) {
 					stepUserData => {
-						const json = JsonElement.parseFromString(main.stackAllocator, data[1..]);
-						defer json.free(main.stackAllocator);
-						const name = json.get([]const u8, "name", "unnamed");
-						const version = json.get([]const u8, "version", "unknown");
+						const zon = ZonElement.parseFromString(main.stackAllocator, data[1..]);
+						defer zon.free(main.stackAllocator);
+						const name = zon.get([]const u8, "name", "unnamed");
+						const version = zon.get([]const u8, "version", "unknown");
 						std.log.info("User {s} joined using version {s}.", .{name, version});
 
 						{
@@ -691,14 +663,14 @@ pub const Protocols = struct {
 						}
 
 						conn.user.?.initPlayer(name);
-						const jsonObject = JsonElement.initObject(main.stackAllocator);
-						defer jsonObject.free(main.stackAllocator);
-						jsonObject.put("player", conn.user.?.player.save(main.stackAllocator));
-						jsonObject.put("spawn", main.server.world.?.spawn);
-						jsonObject.put("blockPalette", main.server.world.?.blockPalette.save(main.stackAllocator));
-						jsonObject.put("biomePalette", main.server.world.?.biomePalette.save(main.stackAllocator));
+						const zonObject = ZonElement.initObject(main.stackAllocator);
+						defer zonObject.free(main.stackAllocator);
+						zonObject.put("player", conn.user.?.player.save(main.stackAllocator));
+						zonObject.put("spawn", main.server.world.?.spawn);
+						zonObject.put("blockPalette", main.server.world.?.blockPalette.save(main.stackAllocator));
+						zonObject.put("biomePalette", main.server.world.?.biomePalette.save(main.stackAllocator));
 						
-						const outData = jsonObject.toStringEfficient(main.stackAllocator, &[1]u8{stepServerData});
+						const outData = zonObject.toStringEfficient(main.stackAllocator, &[1]u8{stepServerData});
 						defer main.stackAllocator.free(outData);
 						conn.sendImportant(id, outData);
 						conn.mutex.lock();
@@ -716,9 +688,9 @@ pub const Protocols = struct {
 						try utils.Compression.unpack(dir, data[1..]);
 					},
 					stepServerData => {
-						const json = JsonElement.parseFromString(main.stackAllocator, data[1..]);
-						defer json.free(main.stackAllocator);
-						try conn.manager.world.?.finishHandshake(json);
+						const zon = ZonElement.parseFromString(main.stackAllocator, data[1..]);
+						defer zon.free(main.stackAllocator);
+						try conn.manager.world.?.finishHandshake(zon);
 						conn.handShakeState.store(stepComplete, .monotonic);
 						conn.handShakeWaiting.broadcast(); // Notify the waiting client thread.
 					},
@@ -739,12 +711,12 @@ pub const Protocols = struct {
 		}
 
 		pub fn clientSide(conn: *Connection, name: []const u8) void {
-			const jsonObject = JsonElement.initObject(main.stackAllocator);
-			defer jsonObject.free(main.stackAllocator);
-			jsonObject.putOwnedString("version", settings.version);
-			jsonObject.putOwnedString("name", name);
+			const zonObject = ZonElement.initObject(main.stackAllocator);
+			defer zonObject.free(main.stackAllocator);
+			zonObject.putOwnedString("version", settings.version);
+			zonObject.putOwnedString("name", name);
 			const prefix = [1]u8 {stepUserData};
-			const data = jsonObject.toStringEfficient(main.stackAllocator, &prefix);
+			const data = zonObject.toStringEfficient(main.stackAllocator, &prefix);
 			defer main.stackAllocator.free(data);
 			conn.sendImportant(id, data);
 
@@ -764,7 +736,9 @@ pub const Protocols = struct {
 				std.mem.readInt(i32, remaining[4..8], .big),
 				std.mem.readInt(i32, remaining[8..12], .big),
 			};
-			remaining = remaining[12..];
+			conn.user.?.clientUpdatePos = basePosition;
+			conn.user.?.renderDistance = std.mem.readInt(u16, remaining[12..14], .big);
+			remaining = remaining[14..];
 			while(remaining.len >= 4) {
 				const voxelSizeShift: u5 = @intCast(remaining[3]);
 				const positionMask = ~((@as(i32, 1) << voxelSizeShift+chunk.chunkShift) - 1);
@@ -781,15 +755,16 @@ pub const Protocols = struct {
 				remaining = remaining[4..];
 			}
 		}
-		pub fn sendRequest(conn: *Connection, requests: []chunk.ChunkPosition, basePosition: Vec3i) void {
+		pub fn sendRequest(conn: *Connection, requests: []chunk.ChunkPosition, basePosition: Vec3i, renderDistance: u16) void {
 			if(requests.len == 0) return;
-			const data = main.stackAllocator.alloc(u8, 12 + 4*requests.len);
+			const data = main.stackAllocator.alloc(u8, 14 + 4*requests.len);
 			defer main.stackAllocator.free(data);
 			var remaining = data;
 			std.mem.writeInt(i32, remaining[0..4], basePosition[0], .big);
 			std.mem.writeInt(i32, remaining[4..8], basePosition[1], .big);
 			std.mem.writeInt(i32, remaining[8..12], basePosition[2], .big);
-			remaining = remaining[12..];
+			std.mem.writeInt(u16, remaining[12..14], renderDistance, .big);
+			remaining = remaining[14..];
 			for(requests) |req| {
 				const voxelSizeShift: u5 = std.math.log2_int(u31, req.voxelSize);
 				const positionMask = ~((@as(i32, 1) << voxelSizeShift+chunk.chunkShift) - 1);
@@ -948,35 +923,35 @@ pub const Protocols = struct {
 		pub const id: u8 = 8;
 		pub const asynchronous = false;
 		fn receive(conn: *Connection, data: []const u8) !void {
-			const jsonArray = JsonElement.parseFromString(main.stackAllocator, data);
-			defer jsonArray.free(main.stackAllocator);
+			const zonArray = ZonElement.parseFromString(main.stackAllocator, data);
+			defer zonArray.free(main.stackAllocator);
 			var i: u32 = 0;
-			while(i < jsonArray.JsonArray.items.len) : (i += 1) {
-				const elem = jsonArray.JsonArray.items[i];
+			while(i < zonArray.array.items.len) : (i += 1) {
+				const elem = zonArray.array.items[i];
 				switch(elem) {
-					.JsonInt => {
+					.int => {
 						main.entity.ClientEntityManager.removeEntity(elem.as(u32, 0));
 					},
-					.JsonObject => {
+					.object => {
 						main.entity.ClientEntityManager.addEntity(elem);
 					},
-					.JsonNull => {
+					.null => {
 						i += 1;
 						break;
 					},
 					else => {
-						std.log.warn("Unrecognized json parameters for protocol {}: {s}", .{id, data});
+						std.log.warn("Unrecognized zon parameters for protocol {}: {s}", .{id, data});
 					},
 				}
 			}
-			while(i < jsonArray.JsonArray.items.len) : (i += 1) {
-				const elem: JsonElement = jsonArray.JsonArray.items[i];
-				if(elem == .JsonInt) {
+			while(i < zonArray.array.items.len) : (i += 1) {
+				const elem: ZonElement = zonArray.array.items[i];
+				if(elem == .int) {
 					conn.manager.world.?.itemDrops.remove(elem.as(u16, 0));
 				} else if(!elem.getChild("array").isNull()) {
 					conn.manager.world.?.itemDrops.loadFrom(elem);
 				} else {
-					conn.manager.world.?.itemDrops.addFromJson(elem);
+					conn.manager.world.?.itemDrops.addFromZon(elem);
 				}
 			}
 		}
@@ -987,23 +962,17 @@ pub const Protocols = struct {
 	pub const genericUpdate = struct {
 		pub const id: u8 = 9;
 		pub const asynchronous = false;
-		const type_renderDistance: u8 = 0;
+		const type_reserved1: u8 = 0;
 		const type_teleport: u8 = 1;
 		const type_cure: u8 = 2;
-		const type_inventoryAdd: u8 = 3;
-		const type_inventoryFull: u8 = 4;
-		const type_inventoryClear: u8 = 5;
-		const type_itemStackDrop: u8 = 6;
-		const type_itemStackCollect: u8 = 7;
+		const type_reserved2: u8 = 3;
+		const type_reserved3: u8 = 4;
+		const type_reserved4: u8 = 5;
+		const type_reserved5: u8 = 6;
+		const type_reserved6: u8 = 7;
 		const type_timeAndBiome: u8 = 8;
 		fn receive(conn: *Connection, data: []const u8) !void {
 			switch(data[0]) {
-				type_renderDistance => {
-					const renderDistance = std.mem.readInt(i32, data[1..5], .big);
-					if(conn.user) |user| {
-						user.renderDistance = @intCast(renderDistance); // TODO: Update the protocol to use u16.
-					}
-				},
 				type_teleport => {
 					game.Player.setPosBlocking(Vec3d{
 						@bitCast(std.mem.readInt(u64, data[1..9], .big)),
@@ -1014,53 +983,17 @@ pub const Protocols = struct {
 				type_cure => {
 					// TODO: health and hunger
 				},
-				type_inventoryAdd => {
-					const slot = std.mem.readInt(u32, data[1..5], .big);
-					const amount = std.mem.readInt(u32, data[5..9], .big);
-					_ = slot;
-					_ = amount;
-					// TODO
-				},
-				type_inventoryFull => {
-					// TODO: Parse inventory from json
-				},
-				type_inventoryClear => {
-					// TODO: Clear inventory
-				},
-				type_itemStackDrop => {
-					const json = JsonElement.parseFromString(main.stackAllocator, data[1..]);
-					defer json.free(main.stackAllocator);
-					const stack = ItemStack.load(json) catch |err| {
-						std.log.err("Received invalid item: {s}, {s}", .{data[1..], @errorName(err)});
-						return;
-					};
-					const pos = json.get(Vec3d, "pos", .{0, 0, 0});
-					const dir = json.get(Vec3f, "dir", .{0, 0, 1});
-					const vel = json.get(f32, "vel", 0);
-					main.server.world.?.drop(stack, pos, dir, vel);
-				},
-				type_itemStackCollect => {
-					const json = JsonElement.parseFromString(main.stackAllocator, data[1..]);
-					defer json.free(main.stackAllocator);
-					const item = items.Item.init(json) catch |err| {
-						std.log.err("Error {s} while collecting item {s}. Ignoring it.", .{@errorName(err), data[1..]});
-						return;
-					};
-					game.Player.mutex.lock();
-					defer game.Player.mutex.unlock();
-					const remaining = game.Player.inventory__SEND_CHANGES_TO_SERVER.addItem(item, json.get(u16, "amount", 0));
-
-					sendInventory_full(conn, game.Player.inventory__SEND_CHANGES_TO_SERVER);
-					if(remaining != 0) {
-						// Couldn't collect everything → drop it again.
-						itemStackDrop(conn, ItemStack{.item=item, .amount=remaining}, game.Player.super.pos, Vec3f{0, 0, 0}, 0);
-					}
-				},
+				type_reserved1 => {},
+				type_reserved2 => {},
+				type_reserved3 => {},
+				type_reserved4 => {},
+				type_reserved5 => {},
+				type_reserved6 => {},
 				type_timeAndBiome => {
 					if(conn.manager.world) |world| {
-						const json = JsonElement.parseFromString(main.stackAllocator, data[1..]);
-						defer json.free(main.stackAllocator);
-						const expectedTime = json.get(i64, "time", 0);
+						const zon = ZonElement.parseFromString(main.stackAllocator, data[1..]);
+						defer zon.free(main.stackAllocator);
+						const expectedTime = zon.get(i64, "time", 0);
 						var curTime = world.gameTime.load(.monotonic);
 						if(@abs(curTime -% expectedTime) >= 10) {
 							world.gameTime.store(expectedTime, .monotonic);
@@ -1073,7 +1006,7 @@ pub const Protocols = struct {
 								curTime = actualTime;
 							}
 						}
-						const newBiome = main.server.terrain.biomes.getById(json.get([]const u8, "biome", ""));
+						const newBiome = main.server.terrain.biomes.getById(zon.get([]const u8, "biome", ""));
 						const oldBiome = world.playerBiome.swap(newBiome, .monotonic);
 						if(oldBiome != newBiome) {
 							main.audio.setMusic(newBiome.preferredMusic);
@@ -1102,13 +1035,6 @@ pub const Protocols = struct {
 			conn.sendUnimportant(id, headeredData);
 		}
 
-		pub fn sendRenderDistance(conn: *Connection, renderDistance: i32) void {
-			var data: [5]u8 = undefined;
-			data[0] = type_renderDistance;
-			std.mem.writeInt(i32, data[1..5], renderDistance, .big);
-			conn.sendImportant(id, &data);
-		}
-
 		pub fn sendTPCoordinates(conn: *Connection, pos: Vec3d) void {
 			var data: [1+24]u8 = undefined;
 			data[0] = type_teleport;
@@ -1124,55 +1050,13 @@ pub const Protocols = struct {
 			conn.sendImportant(id, &data);
 		}
 
-		pub fn sendInventory_ItemStack_add(conn: *Connection, slot: u32, amount: i32) void {
-			var data: [9]u8 = undefined;
-			data[0] = type_inventoryAdd;
-			std.mem.writeInt(u32, data[1..5], slot, .big);
-			std.mem.writeInt(u32, data[5..9], amount, .big);
-			conn.sendImportant(id, &data);
-		}
-
-
-		pub fn sendInventory_full(conn: *Connection, inv: Inventory) void {
-			const json = inv.save(main.stackAllocator);
-			defer json.free(main.stackAllocator);
-			const string = json.toString(main.stackAllocator);
-			defer main.stackAllocator.free(string);
-			addHeaderAndSendImportant(conn, type_inventoryFull, string);
-		}
-
-		pub fn clearInventory(conn: *Connection) void {
-			var data: [1]u8 = undefined;
-			data[0] = type_inventoryClear;
-			conn.sendImportant(id, &data);
-		}
-
-		pub fn itemStackDrop(conn: *Connection, stack: ItemStack, pos: Vec3d, dir: Vec3f, vel: f32) void {
-			const jsonObject = stack.store(main.stackAllocator);
-			defer jsonObject.free(main.stackAllocator);
-			jsonObject.put("pos", pos);
-			jsonObject.put("dir", dir);
-			jsonObject.put("vel", vel);
-			const string = jsonObject.toString(main.stackAllocator);
-			defer main.stackAllocator.free(string);
-			addHeaderAndSendImportant(conn, type_itemStackDrop, string);
-		}
-
-		pub fn itemStackCollect(conn: *Connection, stack: ItemStack) void {
-			const json = stack.store(main.stackAllocator);
-			defer json.free(main.stackAllocator);
-			const string = json.toString(main.stackAllocator);
-			defer main.stackAllocator.free(string);
-			addHeaderAndSendImportant(conn, type_itemStackCollect, string);
-		}
-
 		pub fn sendTimeAndBiome(conn: *Connection, world: *const main.server.ServerWorld) void {
-			const json = JsonElement.initObject(main.stackAllocator);
-			defer json.free(main.stackAllocator);
-			json.put("time", world.gameTime);
+			const zon = ZonElement.initObject(main.stackAllocator);
+			defer zon.free(main.stackAllocator);
+			zon.put("time", world.gameTime);
 			const pos = conn.user.?.player.pos;
-			json.put("biome", (world.getBiome(@intFromFloat(pos[0]), @intFromFloat(pos[1]), @intFromFloat(pos[2]))).id);
-			const string = json.toString(main.stackAllocator);
+			zon.put("biome", (world.getBiome(@intFromFloat(pos[0]), @intFromFloat(pos[1]), @intFromFloat(pos[2]))).id);
+			const string = zon.toString(main.stackAllocator);
 			defer main.stackAllocator.free(string);
 			addHeaderAndSendUnimportant(conn, type_timeAndBiome, string);
 		}
@@ -1268,6 +1152,47 @@ pub const Protocols = struct {
 			conn.sendImportant(id, data);
 		}
 	};
+	pub const inventory = struct {
+		pub const id: u8 = 13;
+		pub const asynchronous = false;
+		fn receive(conn: *Connection, data: []const u8) !void {
+			if(conn.user) |user| {
+				if(data[0] == 0xff) return error.InvalidPacket;
+				try items.Inventory.Sync.ServerSide.receiveCommand(user, data);
+			} else {
+				if(data[0] == 0xff) { // Confirmation
+					items.Inventory.Sync.ClientSide.receiveConfirmation(data[1..]);
+				} else {
+					try items.Inventory.Sync.ClientSide.receiveSyncOperation(data[1..]);
+				}
+			}
+		}
+		pub fn sendCommand(conn: *Connection, payloadType: items.Inventory.Command.PayloadType, _data: []const u8) void {
+			std.debug.assert(conn.user == null);
+			var data = main.stackAllocator.alloc(u8, _data.len + 1);
+			defer main.stackAllocator.free(data);
+			data[0] = @intFromEnum(payloadType);
+			std.debug.assert(data[0] != 0xff);
+			@memcpy(data[1..], _data);
+			conn.sendImportant(id, data);
+		}
+		pub fn sendConfirmation(conn: *Connection, _data: []const u8) void {
+			std.debug.assert(conn.user != null);
+			var data = main.stackAllocator.alloc(u8, _data.len + 1);
+			defer main.stackAllocator.free(data);
+			data[0] = 0xff;
+			@memcpy(data[1..], _data);
+			conn.sendImportant(id, data);
+		}
+		pub fn sendSyncOperation(conn: *Connection, _data: []const u8) void {
+			std.debug.assert(conn.user != null);
+			var data = main.stackAllocator.alloc(u8, _data.len + 1);
+			defer main.stackAllocator.free(data);
+			data[0] = 0;
+			@memcpy(data[1..], _data);
+			conn.sendImportant(id, data);
+		}
+	};
 };
 
 
@@ -1282,8 +1207,8 @@ pub const Connection = struct { // MARK: Connection
 	const timeUnit = 100_000_000;
 
 	// Statistics:
-	pub var packetsSent: Atomic(u32) = Atomic(u32).init(0);
-	pub var packetsResent: Atomic(u32) = Atomic(u32).init(0);
+	pub var packetsSent: Atomic(u32) = .init(0);
+	pub var packetsResent: Atomic(u32) = .init(0);
 
 	manager: *ConnectionManager,
 	user: ?*main.server.User,
@@ -1318,8 +1243,8 @@ pub const Connection = struct { // MARK: Connection
 	congestionControl_bandWidthUsed: usize = 0,
 	congestionControl_curPosition: usize = 0,
 
-	disconnected: Atomic(bool) = Atomic(bool).init(false),
-	handShakeState: Atomic(u8) = Atomic(u8).init(Protocols.handShake.stepStart),
+	disconnected: Atomic(bool) = .init(false),
+	handShakeState: Atomic(u8) = .init(Protocols.handShake.stepStart),
 	handShakeWaiting: std.Thread.Condition = std.Thread.Condition{},
 	lastConnection: i64,
 
@@ -1339,14 +1264,14 @@ pub const Connection = struct { // MARK: Connection
 			.congestionControl_sendTimeLimit = @as(i64, @truncate(std.time.nanoTimestamp())) +% timeUnit*21/20,
 		};
 		errdefer main.globalAllocator.free(result.packetMemory);
-		result.unconfirmedPackets = main.List(UnconfirmedPacket).init(main.globalAllocator);
+		result.unconfirmedPackets = .init(main.globalAllocator);
 		errdefer result.unconfirmedPackets.deinit();
-		result.packetQueue = main.utils.CircularBufferQueue(UnconfirmedPacket).init(main.globalAllocator, 1024);
+		result.packetQueue = .init(main.globalAllocator, 1024);
 		errdefer result.packetQueue.deinit();
 		result.receivedPackets = [3]main.List(u32){
-			main.List(u32).init(main.globalAllocator),
-			main.List(u32).init(main.globalAllocator),
-			main.List(u32).init(main.globalAllocator),
+			.init(main.globalAllocator),
+			.init(main.globalAllocator),
+			.init(main.globalAllocator),
 		};
 		errdefer for(&result.receivedPackets) |*list| {
 			list.deinit();
@@ -1385,7 +1310,7 @@ pub const Connection = struct { // MARK: Connection
 		self.receivedPackets[2].clearRetainingCapacity();
 		self.lastIndex = 0;
 		self.lastIncompletePacket = 0;
-		self.handShakeState = Atomic(u8).init(Protocols.handShake.stepStart);
+		self.handShakeState = .init(Protocols.handShake.stepStart);
 	}
 
 	pub fn deinit(self: *Connection) void {
@@ -1524,9 +1449,9 @@ pub const Connection = struct { // MARK: Connection
 		self.mutex.lock();
 		defer self.mutex.unlock();
 
-		var runLengthEncodingStarts: main.List(u32) = main.List(u32).init(main.stackAllocator);
+		var runLengthEncodingStarts = main.List(u32).init(main.stackAllocator);
 		defer runLengthEncodingStarts.deinit();
-		var runLengthEncodingLengths: main.List(u32) = main.List(u32).init(main.stackAllocator);
+		var runLengthEncodingLengths = main.List(u32).init(main.stackAllocator);
 		defer runLengthEncodingLengths.deinit();
 
 		for(self.receivedPackets) |list| {
@@ -1740,6 +1665,9 @@ pub const Connection = struct { // MARK: Connection
 	pub fn receive(self: *Connection, data: []const u8) void {
 		self.flawedReceive(data) catch |err| {
 			std.log.err("Got error while processing received network data: {s}", .{@errorName(err)});
+			if(@errorReturnTrace()) |trace| {
+				std.log.info("{}", .{trace});
+			}
 			self.disconnect();
 		};
 	}
@@ -1814,6 +1742,7 @@ const ProtocolTask = struct {
 		.isStillNeeded = @ptrCast(&isStillNeeded),
 		.run = @ptrCast(&run),
 		.clean = @ptrCast(&clean),
+		.taskType = .misc,
 	};
 	
 	pub fn schedule(conn: *Connection, protocol: u8, data: []const u8) void {
@@ -1830,7 +1759,7 @@ const ProtocolTask = struct {
 		return std.math.floatMax(f32);
 	}
 
-	pub fn isStillNeeded(_: *ProtocolTask, _: i64) bool {
+	pub fn isStillNeeded(_: *ProtocolTask) bool {
 		return true;
 	}
 

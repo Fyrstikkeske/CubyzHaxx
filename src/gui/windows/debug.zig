@@ -5,10 +5,16 @@ const graphics = main.graphics;
 const draw = graphics.draw;
 const Texture = graphics.Texture;
 const Vec2f = main.vec.Vec2f;
+const TaskType = main.utils.ThreadPool.TaskType;
 
 const gui = @import("../gui.zig");
 const GuiWindow = gui.GuiWindow;
 const GuiComponent = gui.GuiComponent;
+
+
+pub fn onOpen() void {
+	main.threadPool.performance.clear();
+}
 
 pub var window = GuiWindow {
 	.relativePosition = .{
@@ -42,7 +48,8 @@ pub fn render() void {
 		const player = main.game.Player;
 		draw.print("Pos: {d:.1}", .{player.getPosBlocking()}, 0, y, 8, .left);
 		y += 8;
-		draw.print("IsFlying: {} IsGhost: {} HyperSpeed: {}", .{
+		draw.print("Gamemode: {} IsFlying: {} IsGhost: {} HyperSpeed: {}", .{
+			player.gamemode.load(.unordered),
 			player.isFlying.load(.unordered),
 			player.isGhost.load(.unordered),
 			player.hyperSpeed.load(.unordered),
@@ -61,6 +68,19 @@ pub fn render() void {
 		y += 8;
 		draw.print("Queue size: {}", .{main.threadPool.queueSize()}, 0, y, 8, .left);
 		y += 8;
+		const perf = main.threadPool.performance.read();
+		const values = comptime std.enums.values(TaskType);
+		var totalUtime: i64 = 0;
+		for(values) |task|
+			totalUtime += perf.utime[@intFromEnum(task)];
+		for(values) |t| {
+			const name = @tagName(t);
+			const i = @intFromEnum(t);
+			const taskTime = @divFloor(perf.utime[i], @max(1, perf.tasks[i]));
+			const relativeTime = 100.0 * @as(f32, @floatFromInt(perf.utime[i])) / @as(f32, @floatFromInt(totalUtime));
+			draw.print("    {s}: {} µs/task ({d:.1}%)", .{name, taskTime, relativeTime}, 0, y, 8, .left);
+			y += 8;
+		}
 		draw.print("Mesh Queue size: {}", .{main.renderer.mesh_storage.updatableList.items.len}, 0, y, 8, .left);
 		y += 8;
 		{

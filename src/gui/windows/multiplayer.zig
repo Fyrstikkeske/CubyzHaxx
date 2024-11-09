@@ -24,7 +24,7 @@ const padding: f32 = 8;
 
 var connection: ?*ConnectionManager = null;
 var ipAddress: []const u8 = "";
-var gotIpAddress: std.atomic.Value(bool) = std.atomic.Value(bool).init(false);
+var gotIpAddress: std.atomic.Value(bool) = .init(false);
 var thread: ?std.Thread = null;
 const width: f32 = 420;
 
@@ -60,10 +60,10 @@ fn join(_: usize) void {
 		main.globalAllocator.free(settings.lastUsedIPAddress);
 		settings.lastUsedIPAddress = main.globalAllocator.dupe(u8, ipAddressEntry.currentString.items);
 		settings.save();
+		main.game.world = &main.game.testWorld;
 		main.game.testWorld.init(ipAddressEntry.currentString.items, _connection) catch |err| {
 			std.log.err("Encountered error while opening world: {s}", .{@errorName(err)});
 		};
-		main.game.world = &main.game.testWorld;
 		connection = null;
 	} else {
 		std.log.err("No connection found. Cannot connect.", .{});

@@ -7,13 +7,14 @@ const itemdrop = @import("itemdrop.zig");
 const ClientItemDropManager = itemdrop.ClientItemDropManager;
 const items = @import("items.zig");
 const Inventory = items.Inventory;
-const JsonElement = @import("json.zig").JsonElement;
+const ZonElement = @import("zon.zig").ZonElement;
 const main = @import("main.zig");
 const KeyBoard = main.KeyBoard;
 const network = @import("network.zig");
 const Connection = network.Connection;
 const ConnectionManager = network.ConnectionManager;
 const vec = @import("vec.zig");
+const Vec2f = vec.Vec2f;
 const Vec3f = vec.Vec3f;
 const Vec4f = vec.Vec4f;
 const Vec3d = vec.Vec3d;
@@ -286,13 +287,14 @@ pub const collision = struct {
 		checkPos[index] += amount;
 
 		if (collision.collides(side, dir, -amount, checkPos, hitBox)) |box| {
-			const height = box.max[2] - checkPos[2] + hitBox.max[2];
-			if (height <= steppingHeight) {
+			const newFloor = box.max[2] + hitBox.max[2];
+			const heightDifference = newFloor - checkPos[2];
+			if (heightDifference <= steppingHeight) {
 				// If we collide but might be able to step up
-				checkPos[2] += steppingHeight;
+				checkPos[2] = newFloor + 0.0001;
 				if (collision.collides(side, dir, -amount, checkPos, hitBox) == null) {
 					// If there's no new collision then we can execute the step-up
-					resultingMovement[2] = height;
+					resultingMovement[2] = heightDifference;
 					return resultingMovement;
 				}
 			}
@@ -322,6 +324,8 @@ pub const collision = struct {
 	};
 };
 
+pub const Gamemode = enum(u8) { survival, creative };
+
 pub const Player = struct { // MARK: Player
 	pub var super: main.server.Entity = .{};
 	pub var eyePos: Vec3d = .{0, 0, 0};
@@ -329,11 +333,12 @@ pub const Player = struct { // MARK: Player
 	pub var eyeCoyote: f64 = 0;
 	pub var eyeStep: @Vector(3, bool) = .{false, false, false};
 	pub var id: u32 = 0;
-	pub var isFlying: Atomic(bool) = Atomic(bool).init(false);
-	pub var isGhost: Atomic(bool) = Atomic(bool).init(false);
-	pub var hyperSpeed: Atomic(bool) = Atomic(bool).init(false);
+	pub var gamemode: Atomic(Gamemode) = .init(.creative);
+	pub var isFlying: Atomic(bool) = .init(false);
+	pub var isGhost: Atomic(bool) = .init(false);
+	pub var hyperSpeed: Atomic(bool) = .init(false);
 	pub var mutex: std.Thread.Mutex = std.Thread.Mutex{};
-	pub var inventory__SEND_CHANGES_TO_SERVER: Inventory = undefined;
+	pub var inventory: Inventory = undefined;
 	pub var selectedSlot: u32 = 0;
 
 	pub var maxHealth: f32 = 8;
@@ -355,9 +360,9 @@ pub const Player = struct { // MARK: Player
 	pub const desiredEyePos: Vec3d = .{0, 0, 1.7 - outerBoundingBoxExtent[2]};
 	pub const jumpHeight = 1.25;
 
-	fn loadFrom(json: JsonElement) void {
-		super.loadFrom(json);
-		inventory__SEND_CHANGES_TO_SERVER.loadFromJson(json.getChild("inventory"));
+	fn loadFrom(zon: ZonElement) void {
+		super.loadFrom(zon);
+		inventory.loadFromZon(zon.getChild("inventory"));
 	}
 
 	pub fn setPosBlocking(newPos: Vec3d) void {
@@ -396,6 +401,24 @@ pub const Player = struct { // MARK: Player
 		return eyeCoyote;
 	}
 
+	pub fn setGamemode(newGamemode: Gamemode) void {
+		gamemode.store(newGamemode, .monotonic);
+
+		if(newGamemode != .creative) {
+			isFlying.store(false, .monotonic);
+			isGhost.store(false, .monotonic);
+			hyperSpeed.store(false, .monotonic);
+		}
+	}
+
+	pub fn isCreative() bool {
+		return gamemode.load(.monotonic) == .creative;
+	}
+
+	pub fn isActuallyFlying() bool {
+		return isFlying.load(.monotonic) and !isGhost.load(.monotonic);
+	}
+
 	fn steppingHeight() Vec3d {
 		if(onGround) {
 			return .{0, 0, 0.6};
@@ -415,52 +438,50 @@ pub const Player = struct { // MARK: Player
 				return;
 			}
 		}
-		main.renderer.MeshSelection.placeBlock(&inventory__SEND_CHANGES_TO_SERVER.items[selectedSlot]);
+
+		inventory.placeBlock(selectedSlot, isCreative());
 	}
 
 	pub fn breakBlock() void { // TODO: Breaking animation and tools
 		if(!main.Window.grabbed) return;
-		main.renderer.MeshSelection.breakBlock(&inventory__SEND_CHANGES_TO_SERVER.items[selectedSlot]);
+		inventory.breakBlock(selectedSlot);
 	}
 
 	pub fn acquireSelectedBlock() void {
 		if (main.renderer.MeshSelection.selectedBlockPos) |selectedPos| {
 			const block = main.renderer.mesh_storage.getBlock(selectedPos[0], selectedPos[1], selectedPos[2]) orelse return;
-			for (0..items.itemListSize) |idx|{
-				if (items.itemList[idx].block == block.typ){
-					const item = items.Item {.baseItem = &items.itemList[idx]};
-					var isDone = false;
-					
-					// Check if there is already a slot with that item type
-					for (0..12) |slotIdx| {
-						if (std.meta.eql(inventory__SEND_CHANGES_TO_SERVER.items[slotIdx].item, item)) {
-							inventory__SEND_CHANGES_TO_SERVER.items[slotIdx] = items.ItemStack {.item = item, .amount = items.itemList[idx].stackSize};
-							selectedSlot = @intCast(slotIdx);
-							isDone = true;
-							break;
-						}
-					}
-					if (isDone) break;
 
-					if (inventory__SEND_CHANGES_TO_SERVER.items[selectedSlot].empty()) {
-						inventory__SEND_CHANGES_TO_SERVER.items[selectedSlot] = items.ItemStack {.item = item, .amount = items.itemList[idx].stackSize};
-						break;
+			const item: items.Item = for (0..items.itemListSize) |idx| {
+				if (items.itemList[idx].block == block.typ) {
+					break .{.baseItem = &items.itemList[idx]};
+				}
+			} else return;
+
+			// Check if there is already a slot with that item type
+			for (0..12) |slotIdx| {
+				if (std.meta.eql(inventory.getItem(slotIdx), item)) {
+					if (isCreative()) {
+						inventory.fillFromCreative(@intCast(slotIdx), item);
 					}
-					
+					selectedSlot = @intCast(slotIdx);
+					return;
+				}
+			}
+
+			if (isCreative()) {
+				const targetSlot = blk: {
+					if (inventory.getItem(selectedSlot) == null) break :blk selectedSlot;
 					// Look for an empty slot
 					for (0..12) |slotIdx| {
-						if (inventory__SEND_CHANGES_TO_SERVER.items[slotIdx].empty()) {
-							inventory__SEND_CHANGES_TO_SERVER.items[slotIdx] = items.ItemStack {.item = item, .amount = items.itemList[idx].stackSize};
-							selectedSlot = @intCast(slotIdx);
-							isDone = true;
-							break;
+						if (inventory.getItem(slotIdx) == null) {
+							break :blk slotIdx;
 						}
 					}
-					if (isDone) break;
+					break :blk selectedSlot;
+				};
 
-					inventory__SEND_CHANGES_TO_SERVER.items[selectedSlot] = items.ItemStack {.item = item, .amount = items.itemList[idx].stackSize};
-					break;
-				}
+				inventory.fillFromCreative(@intCast(targetSlot), item);
+				selectedSlot = @intCast(targetSlot);
 			}
 		}
 	}
@@ -476,7 +497,7 @@ pub const World = struct { // MARK: World
 	gravity: f64 = 9.81*1.5, // TODO: Balance
 	name: []const u8,
 	milliTime: i64,
-	gameTime: Atomic(i64) = Atomic(i64).init(0),
+	gameTime: Atomic(i64) = .init(0),
 	spawn: Vec3f = undefined,
 	blockPalette: *assets.Palette = undefined,
 	biomePalette: *assets.Palette = undefined,
@@ -491,21 +512,23 @@ pub const World = struct { // MARK: World
 			.milliTime = std.time.milliTimestamp(),
 		};
 		self.itemDrops.init(main.globalAllocator, self);
-		Player.inventory__SEND_CHANGES_TO_SERVER = Inventory.init(main.globalAllocator, 32);
 		network.Protocols.handShake.clientSide(self.conn, settings.playerName);
 
 		main.Window.setMouseGrabbed(true);
 
 		main.blocks.meshes.generateTextureArray();
 		main.models.uploadModels();
-		self.playerBiome = Atomic(*const main.server.terrain.biomes.Biome).init(main.server.terrain.biomes.getById(""));
+		self.playerBiome = .init(main.server.terrain.biomes.getById(""));
 		main.audio.setMusic(self.playerBiome.raw.preferredMusic);
 	}
 
 	pub fn deinit(self: *World) void {
 		// TODO: Close all world related guis.
+		main.gui.inventory.deinit();
 		main.gui.deinit();
 		main.gui.init();
+
+		Player.inventory.deinit(main.globalAllocator);
 
 		main.threadPool.clear();
 		self.conn.deinit();
@@ -522,20 +545,20 @@ pub const World = struct { // MARK: World
 		renderer.mesh_storage.deinit();
 		renderer.mesh_storage.init();
 		assets.unloadAssets();
-		Player.inventory__SEND_CHANGES_TO_SERVER.deinit(main.globalAllocator);
 	}
 
-	pub fn finishHandshake(self: *World, json: JsonElement) !void {
+	pub fn finishHandshake(self: *World, zon: ZonElement) !void {
 		// TODO: Consider using a per-world allocator.
-		self.blockPalette = try assets.Palette.init(main.globalAllocator, json.getChild("blockPalette"), "cubyz:air");
+		self.blockPalette = try assets.Palette.init(main.globalAllocator, zon.getChild("blockPalette"), "cubyz:air");
 		errdefer self.blockPalette.deinit();
-		self.biomePalette = try assets.Palette.init(main.globalAllocator, json.getChild("biomePalette"), null);
+		self.biomePalette = try assets.Palette.init(main.globalAllocator, zon.getChild("biomePalette"), null);
 		errdefer self.biomePalette.deinit();
-		self.spawn = json.get(Vec3f, "spawn", .{0, 0, 0});
+		self.spawn = zon.get(Vec3f, "spawn", .{0, 0, 0});
 
 		try assets.loadWorldAssets("serverAssets", self.blockPalette, self.biomePalette);
-		Player.loadFrom(json.getChild("player"));
-		Player.id = json.get(u32, "player_id", std.math.maxInt(u32));
+		Player.loadFrom(zon.getChild("player"));
+		Player.id = zon.get(u32, "player_id", std.math.maxInt(u32));
+		Player.inventory = Inventory.init(main.globalAllocator, 32, .normal, .playerInventory);
 	}
 
 	pub fn update(self: *World) void {
@@ -623,17 +646,36 @@ pub fn pressAcquireSelectedBlock() void {
 }
 
 pub fn flyToggle() void {
-	Player.isFlying.store(!Player.isFlying.load(.monotonic), .monotonic);
-	if(!Player.isFlying.load(.monotonic)) Player.isGhost.store(false, .monotonic);
+	if(!Player.isCreative()) return;
+
+	const newIsFlying = !Player.isActuallyFlying();
+
+	Player.isFlying.store(newIsFlying, .monotonic);
+	Player.isGhost.store(false, .monotonic);
 }
 
 pub fn ghostToggle() void {
-	Player.isGhost.store(!Player.isGhost.load(.monotonic), .monotonic);
-	if(Player.isGhost.load(.monotonic)) Player.isFlying.store(true, .monotonic);
+	if(!Player.isCreative()) return;
+
+	const newIsGhost = !Player.isGhost.load(.monotonic);
+
+	Player.isGhost.store(newIsGhost, .monotonic);
+	Player.isFlying.store(newIsGhost, .monotonic);
 }
 
 pub fn hyperSpeedToggle() void {
+	if(!Player.isCreative()) return;
+
 	Player.hyperSpeed.store(!Player.hyperSpeed.load(.monotonic), .monotonic);
+}
+
+pub fn gamemodeToggle() void {
+	const newGamemode = switch(Player.gamemode.load(.monotonic)) {
+		.survival => Gamemode.creative,
+		.creative => Gamemode.survival
+	};
+
+	Player.setGamemode(newGamemode);
 }
 
 
@@ -642,7 +684,7 @@ pub fn update(deltaTime: f64) void { // MARK: update()
 	const terminalVelocity = 90.0;
 	const airFrictionCoefficient = gravity/terminalVelocity; // λ = a/v in equillibrium
 	var move: Vec3d = .{0, 0, 0};
-	if (main.renderer.mesh_storage.getBlock(@intFromFloat(@floor(Player.super.pos[0])), @intFromFloat(@floor(Player.super.pos[1])), @intFromFloat(@floor(Player.super.pos[2]))) != null) {		
+	if (main.renderer.mesh_storage.getBlock(@intFromFloat(@floor(Player.super.pos[0])), @intFromFloat(@floor(Player.super.pos[1])), @intFromFloat(@floor(Player.super.pos[2]))) != null) {
 		var acc = Vec3d{0, 0, 0};
 		if (!Player.isFlying.load(.monotonic)) {
 			acc[2] = -gravity;
@@ -666,34 +708,34 @@ pub fn update(deltaTime: f64) void { // MARK: update()
 		var movementDir: Vec3d = .{0, 0, 0};
 		var movementSpeed: f64 = 0;
 		if(main.Window.grabbed) {
-			if(KeyBoard.key("forward").pressed) {
+			if(KeyBoard.key("forward").value > 0.0) {
 				if(KeyBoard.key("sprint").pressed) {
 					if(Player.isGhost.load(.monotonic)) {
-						movementSpeed = @max(movementSpeed, 128);
-						movementDir += forward*@as(Vec3d, @splat(128));
+						movementSpeed = @max(movementSpeed, 128)*KeyBoard.key("forward").value;
+						movementDir += forward*@as(Vec3d, @splat(128*KeyBoard.key("forward").value));
 					} else if(Player.isFlying.load(.monotonic)) {
-						movementSpeed = @max(movementSpeed, 32);
-						movementDir += forward*@as(Vec3d, @splat(32));
+						movementSpeed = @max(movementSpeed, 32)*KeyBoard.key("forward").value;
+						movementDir += forward*@as(Vec3d, @splat(32*KeyBoard.key("forward").value));
 					} else {
-						movementSpeed = @max(movementSpeed, 8);
-						movementDir += forward*@as(Vec3d, @splat(8));
+						movementSpeed = @max(movementSpeed, 8)*KeyBoard.key("forward").value;
+						movementDir += forward*@as(Vec3d, @splat(8*KeyBoard.key("forward").value));
 					}
 				} else {
-					movementSpeed = @max(movementSpeed, 4);
-					movementDir += forward*@as(Vec3d, @splat(4));
+					movementSpeed = @max(movementSpeed, 4)*KeyBoard.key("forward").value;
+					movementDir += forward*@as(Vec3d, @splat(4*KeyBoard.key("forward").value));
 				}
 			}
-			if(KeyBoard.key("backward").pressed) {
-				movementSpeed = @max(movementSpeed, 4);
-				movementDir += forward*@as(Vec3d, @splat(-4));
+			if(KeyBoard.key("backward").value > 0.0) {
+				movementSpeed = @max(movementSpeed, 4)*KeyBoard.key("backward").value;
+				movementDir += forward*@as(Vec3d, @splat(-4*KeyBoard.key("backward").value));
 			}
-			if(KeyBoard.key("left").pressed) {
-				movementSpeed = @max(movementSpeed, 4);
-				movementDir += right*@as(Vec3d, @splat(4));
+			if(KeyBoard.key("left").value > 0.0) {
+				movementSpeed = @max(movementSpeed, 4*KeyBoard.key("left").value);
+				movementDir += right*@as(Vec3d, @splat(4*KeyBoard.key("left").value));
 			}
-			if(KeyBoard.key("right").pressed) {
-				movementSpeed = @max(movementSpeed, 4);
-				movementDir += right*@as(Vec3d, @splat(-4));
+			if(KeyBoard.key("right").value > 0.0) {
+				movementSpeed = @max(movementSpeed, 4*KeyBoard.key("right").value);
+				movementDir += right*@as(Vec3d, @splat(-4*KeyBoard.key("right").value));
 			}
 			if(KeyBoard.key("jump").pressed) {
 				if(Player.isFlying.load(.monotonic)) {
@@ -740,6 +782,11 @@ pub fn update(deltaTime: f64) void { // MARK: update()
 			const newSlot: i32 = @as(i32, @intCast(Player.selectedSlot)) -% @as(i32, @intFromFloat(main.Window.scrollOffset));
 			Player.selectedSlot = @intCast(@mod(newSlot, 12));
 			main.Window.scrollOffset = 0;
+			const newPos = Vec2f {
+				@floatCast(main.KeyBoard.key("cameraRight").value - main.KeyBoard.key("cameraLeft").value),
+				@floatCast(main.KeyBoard.key("cameraDown").value - main.KeyBoard.key("cameraUp").value),
+			} * @as(Vec2f, @splat(3.14 * settings.controllerSensitivity));
+			main.game.camera.moveRotation(newPos[0] / 64.0, newPos[1] / 64.0);
 		}
 
 		// This our model for movement on a single frame:
