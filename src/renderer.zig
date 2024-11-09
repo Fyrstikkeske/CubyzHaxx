@@ -769,7 +769,6 @@ pub const MeshSelection = struct { // MARK: MeshSelection
 								if(rotationMode.generateData(main.game.world.?, selectedPos, relPos, lastDir, neighborDir, &block, false)) {
 									if(!canPlaceBlock(selectedPos, block)) return;
 									updateBlockAndSendUpdate(selectedPos[0], selectedPos[1], selectedPos[2], block);
-									_ = inventoryStack.add(item, @as(i32, removeblockfrominventory));
 									return;
 								}
 							}
@@ -782,7 +781,6 @@ pub const MeshSelection = struct { // MARK: MeshSelection
 								if(rotationMode.generateData(main.game.world.?, neighborPos, relPos, lastDir, neighborDir, &block, false)) {
 									if(!canPlaceBlock(neighborPos, block)) return;
 									updateBlockAndSendUpdate(neighborPos[0], neighborPos[1], neighborPos[2], block);
-									_ = inventoryStack.add(item, @as(i32, removeblockfrominventory));
 									return;
 								}
 							} else {
@@ -792,7 +790,6 @@ pub const MeshSelection = struct { // MARK: MeshSelection
 								if(rotationMode.generateData(main.game.world.?, neighborPos, relPos, lastDir, neighborDir, &block, true)) {
 									if(!canPlaceBlock(neighborPos, block)) return;
 									updateBlockAndSendUpdate(neighborPos[0], neighborPos[1], neighborPos[2], block);
-									_ = inventoryStack.add(item, @as(i32, removeblockfrominventory));
 									return;
 								}
 							}
