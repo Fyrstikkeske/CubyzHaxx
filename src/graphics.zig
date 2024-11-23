@@ -600,6 +600,12 @@ pub const TextBuffer = struct { // MARK: TextBuffer
 			self.curChar = self.unicodeIterator.nextCodepoint() orelse return null;
 		}
 
+		fn peekNextByte(self: *Parser) u8 {
+			const next = self.unicodeIterator.peek(1);
+			if(next.len == 0) return 0;
+			return next[0];
+		}
+
 		fn parse(self: *Parser) void {
 			self.curIndex = @intCast(self.unicodeIterator.i);
 			self.curChar = self.unicodeIterator.nextCodepoint() orelse return;
@@ -614,12 +620,21 @@ pub const TextBuffer = struct { // MARK: TextBuffer
 					}
 				},
 				'_' => {
-					self.appendControlGetNext() orelse return;
-					if(self.curChar == '_') {
+					if(self.peekNextByte() == '_') {
+						self.appendControlGetNext() orelse return;
+						self.appendControlGetNext() orelse return;
+						self.currentFontEffect.underline = !self.currentFontEffect.underline;
+					} else {
+						self.appendGetNext() orelse return;
+					}
+				},
+				'~' => {
+					if(self.peekNextByte() == '~') {
+						self.appendControlGetNext() orelse return;
 						self.appendControlGetNext() orelse return;
 						self.currentFontEffect.strikethrough = !self.currentFontEffect.strikethrough;
 					} else {
-						self.currentFontEffect.underline = !self.currentFontEffect.underline;
+						self.appendGetNext() orelse return;
 					}
 				},
 				'\\' => {
@@ -639,6 +654,10 @@ pub const TextBuffer = struct { // MARK: TextBuffer
 						self.appendControlGetNext() orelse return;
 						if(shift == 0) break;
 					}
+				},
+				'§' => {
+					self.currentFontEffect = .{.color = self.currentFontEffect.color};
+					self.appendControlGetNext() orelse return;
 				},
 				else => {
 					self.appendGetNext() orelse return;
@@ -893,7 +912,9 @@ pub const TextBuffer = struct { // MARK: TextBuffer
 			y = 0;
 			if(line.isUnderline) y += 15
 			else y += 8;
+			const oldColor = draw.color;
 			draw.setColor(line.color | (@as(u32, 0xff000000) & draw.color));
+			defer draw.setColor(oldColor);
 			for(lineWraps, 0..) |lineWrap, j| {
 				const lineStart = @max(0, line.start);
 				const lineEnd = @min(lineWrap, line.end);
@@ -960,7 +981,9 @@ pub const TextBuffer = struct { // MARK: TextBuffer
 			y = 0;
 			if(line.isUnderline) y += 15
 			else y += 8;
+			const oldColor = draw.color;
 			draw.setColor(shadowColor(line.color) | (@as(u32, 0xff000000) & draw.color));
+			defer draw.setColor(oldColor);
 			for(lineWraps, 0..) |lineWrap, j| {
 				const lineStart = @max(0, line.start);
 				const lineEnd = @min(lineWrap, line.end);
